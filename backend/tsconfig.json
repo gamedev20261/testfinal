@@ -6,6 +6,7 @@
     "module": "preserve",
     "moduleResolution": "bundler",
     "strict": true,
+    "noUnusedLocals": true,
     "noEmit": true,
     "esModuleInterop": true,
     "isolatedModules": true,

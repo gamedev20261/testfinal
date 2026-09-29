@@ -20,6 +20,8 @@ import { uploadImages, uploadedFiles, removeTempFiles } from '../images/upload';
 import { HttpError } from '../../lib/http-error';
 import { listProjectTasks, createTask } from '../tasks/tasks.service';
 import { createTaskSchema } from '../tasks/tasks.schemas';
+import { exportSchema } from '../export/export.schemas';
+import { exportSummary, streamExport } from '../export/export.service';
 
 export const projectsRouter = Router();
 projectsRouter.use(requireAuth);
@@ -119,4 +121,16 @@ projectsRouter.post('/:id/tasks', admin, async (req, res) => {
 projectsRouter.get('/:id/stats', async (req, res) => {
   const project = await findProjectForUser(req.user!, idParam(req.params.id, 'Project'));
   res.json({ stats: await getProjectStats(project.id) });
+});
+
+// ── Export (a .zip download) ──
+
+projectsRouter.get('/:id/export/summary', admin, async (req, res) => {
+  const project = await findProjectForUser(req.user!, idParam(req.params.id, 'Project'));
+  res.json(await exportSummary(project.id, exportSchema.pick({ tasks: true }).parse(req.query)));
+});
+
+projectsRouter.get('/:id/export', admin, async (req, res) => {
+  const project = await findProjectForUser(req.user!, idParam(req.params.id, 'Project'));
+  await streamExport(res, project, exportSchema.parse(req.query));
 });

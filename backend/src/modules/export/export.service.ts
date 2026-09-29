@@ -6,12 +6,12 @@ import type { Project } from '../../db/schema';
 import { HttpError } from '../../lib/http-error';
 import { imageFile, DISPLAY_FILE } from '../../lib/storage';
 import { SHARP_OPTIONS } from '../images/processing/read-raster';
-import { originalPath } from '../images/processing/process-image';
 import { listProjectLabelClasses } from '../projects/projects.service';
-import { EXPORT_FORMATS, type ExportOptions } from './export.schemas';
-import { countPassedTasks, findExportImages, findChipShapes, findMapShapes, type ExportImage } from './export.queries';
-import { yoloLines, yoloDataYaml, cocoJson, type ExportChip, type YoloMode } from './export.writers';
-import { mergedMask, classMask, maskLegend, maskReadme, hexToRgb } from './export.masks';
+import { EXPORT_FORMATS, type ExportFormat, type ExportOptions } from './export.schemas';
+import { countPassedTasks, findExportImages, findChipShapes, type ExportImage } from './export.queries';
+import { yoloObbLines, yoloDataYaml, vocXml, classesTxt, type ExportChip } from './export.writers';
+import { mergedMask, classMask, maskClassesTxt, hexToRgb } from './export.masks';
+import { augmentImage, augmentShapes, makePlan, randomFor, type RawImage } from './export.augment';
 
 // A mask is built in memory (3 bytes per pixel when merged): whole-image masks of huge images need chips
 const MAX_MASK_PIXELS = 150_000_000;
@@ -26,15 +26,23 @@ export async function exportSummary(projectId: string) {
   };
 }
 
+// Where each part of a sample goes in the zip
+const LAYOUT = {
+  YOLO_OBB: { images: 'images', labels: 'labels' },
+  VOC: { images: 'JPEGImages', labels: 'Annotations' },
+  MASKS: { images: 'images', labels: 'masks' },
+} as const;
+
 // Streams a .zip straight to the browser:
-//   YOLO / YOLO_OBB: images/, labels/, data.yaml
-//   COCO:            images/, annotations.json
-//   MASKS:           images/, masks/ (merged) or masks/<class>/ (per class), classes.json
-//   GEOJSON:         one .geojson per image (+ the original images)
+//   YOLO_OBB: images/, labels/*.txt, data.yaml, classes.txt
+//   VOC:      JPEGImages/, Annotations/*.xml, ImageSets/Main/trainval.txt, classes.txt
+//   MASKS:    images/, masks/ (merged) or masks/<class>/ (one folder per class), classes.txt
+// Every chip is followed by its augmented copies (<name>_aug1, <name>_aug2…) when asked.
 export async function streamExport(res: Response, project: Project, options: ExportOptions) {
-  const formats: readonly string[] = EXPORT_FORMATS[project.type];
-  if (!formats.includes(options.format)) {
-    throw new HttpError(400, `A ${project.type.toLowerCase()} project exports as ${formats.join(', ')}`);
+  const formats: readonly ExportFormat[] = EXPORT_FORMATS[project.type];
+  const format = options.format ?? formats[0];
+  if (!formats.includes(format)) {
+    throw new HttpError(400, `A ${project.type.toLowerCase()} project exports as ${formats.join(' or ')}`);
   }
   if ((await countPassedTasks(project.id)) === 0) {
     throw new HttpError(400, 'No task of this project has passed review yet. Only passed tasks can be exported.');
@@ -42,59 +50,55 @@ export async function streamExport(res: Response, project: Project, options: Exp
   const exportImages = await findExportImages(project.id);
   if (exportImages.length === 0) throw new HttpError(400, 'Nothing to export: the passed tasks have no ready images');
   const tooLarge = exportImages.find((image) => image.width * image.height > MAX_MASK_PIXELS);
-  if (options.format === 'MASKS' && options.chipSize === 0 && tooLarge) {
+  if (format === 'MASKS' && options.chipSize === 0 && tooLarge) {
     throw new HttpError(400, `${tooLarge.originalName} is too large for a whole-image mask. Choose a chip size.`);
   }
   const classes = await listProjectLabelClasses(project.id);
   const names = uniqueBaseNames(exportImages);
+  const folders = uniqueFolders(classes);
+  const classIndex = new Map(classes.map((labelClass, index) => [labelClass.id, index]));
+  const className = new Map(classes.map((labelClass) => [labelClass.id, labelClass.name]));
+  const colorOf = new Map(classes.map((labelClass) => [labelClass.id, hexToRgb(labelClass.color)]));
+  const layout = LAYOUT[format];
 
   const zip = new ZipArchive({ zlib: { level: 6 } });
   zip.on('error', (err) => res.destroy(err));
-  res.attachment(`${safeName(project.name)}-${options.format.toLowerCase()}.zip`);
+  res.attachment(`${safeName(project.name)}-${format.toLowerCase()}.zip`);
   zip.pipe(res);
+  const sampleNames: string[] = [];
 
-  if (options.format === 'GEOJSON') {
-    for (const image of exportImages) {
-      const shapes = await findMapShapes(project.id, image.id);
-      zip.append(JSON.stringify(featureCollection(image, shapes), null, 1), { name: `${names.get(image.id)}.geojson` });
-      const ext = path.extname(image.originalName).toLowerCase();
-      if (options.includeImages) zip.file(originalPath(image), { name: `images/${names.get(image.id)}${ext}` });
+  // One image and its labels (or masks)
+  async function addSample(chip: ExportChip, jpeg: Buffer) {
+    const base = path.parse(chip.fileName).name;
+    sampleNames.push(base);
+    zip.append(jpeg, { name: `${layout.images}/${chip.fileName}` });
+    if (format === 'YOLO_OBB') zip.append(yoloObbLines(chip, classIndex), { name: `${layout.labels}/${base}.txt` });
+    if (format === 'VOC') zip.append(vocXml(chip, className), { name: `${layout.labels}/${base}.xml` });
+    if (format === 'MASKS' && options.mergeClasses) zip.append(await mergedMask(chip, colorOf), { name: `${layout.labels}/${base}.png` });
+    if (format === 'MASKS' && !options.mergeClasses) {
+      for (const labelClass of classes) {
+        zip.append(await classMask(chip, labelClass.id), { name: `${layout.labels}/${folders.get(labelClass.id)}/${base}.png` });
+      }
     }
-    await zip.finalize();
-    return;
   }
-
-  const chips: ExportChip[] = [];
-  const classIndex = new Map(classes.map((labelClass, index) => [labelClass.id, index]));
-  const yoloMode: YoloMode = options.format === 'YOLO_OBB' ? 'OBB' : project.type === 'SEGMENTATION' ? 'SEGMENT' : 'BOX';
-  const colorOf = new Map(classes.map((labelClass) => [labelClass.id, hexToRgb(labelClass.color)]));
-  const folders = uniqueFolders(classes);
 
   for (const image of exportImages) {
     for (const chip of await cutIntoChips(project.id, image, names.get(image.id)!, options.chipSize)) {
-      chips.push(chip);
-      const baseName = path.parse(chip.fileName).name;
-      if (options.includeImages) zip.append(await chipJpeg(image, chip), { name: `images/${chip.fileName}` });
-      if (options.format === 'YOLO' || options.format === 'YOLO_OBB') {
-        zip.append(yoloLines(chip, classIndex, yoloMode), { name: `labels/${baseName}.txt` });
-      }
-      if (options.format === 'MASKS' && options.mergeClasses) {
-        zip.append(await mergedMask(chip, colorOf), { name: `masks/${baseName}.png` });
-      }
-      if (options.format === 'MASKS' && !options.mergeClasses) {
-        for (const labelClass of classes) {
-          zip.append(await classMask(chip, labelClass.id), { name: `masks/${folders.get(labelClass.id)}/${baseName}.png` });
-        }
+      const pixels = await chipPixels(image, chip);
+      await addSample(chip, await sharp(pixels.data, { raw: { width: pixels.width, height: pixels.height, channels: 3 } }).jpeg({ quality: 92 }).toBuffer());
+
+      const base = path.parse(chip.fileName).name;
+      for (let copy = 1; copy <= options.augmentCopies; copy++) {
+        const plan = makePlan(randomFor(`${base}#${copy}`), options.geometric, options.color);
+        const moved = augmentShapes(chip, plan);
+        await addSample({ ...moved, fileName: `${base}_aug${copy}.jpg` }, await augmentImage(pixels, plan));
       }
     }
   }
 
-  if (options.format === 'YOLO' || options.format === 'YOLO_OBB') zip.append(yoloDataYaml(classes), { name: 'data.yaml' });
-  if (options.format === 'COCO') zip.append(JSON.stringify(cocoJson(chips, classes)), { name: 'annotations.json' });
-  if (options.format === 'MASKS') {
-    zip.append(JSON.stringify(maskLegend(classes, folders, options.mergeClasses), null, 2), { name: 'classes.json' });
-    zip.append(maskReadme(options.mergeClasses), { name: 'README.txt' });
-  }
+  if (format === 'YOLO_OBB') zip.append(yoloDataYaml(classes), { name: 'data.yaml' });
+  if (format === 'VOC') zip.append([...sampleNames, ''].join('\n'), { name: 'ImageSets/Main/trainval.txt' });
+  zip.append(format === 'MASKS' ? maskClassesTxt(classes, folders, options.mergeClasses) : classesTxt(classes), { name: 'classes.txt' });
   await zip.finalize();
 }
 
@@ -117,19 +121,14 @@ async function cutIntoChips(projectId: string, image: ExportImage, baseName: str
   return [...chips.values()];
 }
 
-function chipJpeg(image: ExportImage, chip: Chip) {
-  return sharp(imageFile(image.id, DISPLAY_FILE), SHARP_OPTIONS)
+// The chip's pixels (8-bit RGB), read once and reused by its augmented copies
+async function chipPixels(image: ExportImage, chip: Chip): Promise<RawImage> {
+  const { data, info } = await sharp(imageFile(image.id, DISPLAY_FILE), SHARP_OPTIONS)
     .extract({ left: chip.x0, top: chip.y0, width: chip.width, height: chip.height })
-    .jpeg({ quality: 92 })
-    .toBuffer();
-}
-
-function featureCollection(image: ExportImage, shapes: Awaited<ReturnType<typeof findMapShapes>>) {
-  return {
-    type: 'FeatureCollection',
-    name: image.originalName,
-    features: shapes.map(({ geometry, id, ...properties }) => ({ type: 'Feature', id, geometry, properties })),
-  };
+    .removeAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  return { data, width: info.width, height: info.height };
 }
 
 // "a b.tif" → "a_b"; the same name twice → "a_b", "a_b_2"

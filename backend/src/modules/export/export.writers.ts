@@ -8,6 +8,7 @@ export type ExportChip = { fileName: string; width: number; height: number; shap
 
 const round = (value: number) => Math.round(value * 1e6) / 1e6;
 const ring = (shape: ChipShape) => (shape.geometry as PolygonGeometry).coordinates[0].slice(0, -1); // without the closing point
+const boxShapes = (chip: ExportChip) => chip.shapes.filter((shape) => shape.geometry.type === 'Polygon');
 
 function bounds(points: Position[]) {
   const xs = points.map(([x]) => x);
@@ -27,36 +28,21 @@ export function orientedCorners(points: Position[], angle: number): Position[] {
     [u1, v0],
     [u1, v1],
     [u0, v1],
-  ].map(([u, v]) => [u * cos - v * sin, u * sin + v * cos]);
+  ].map(([u, v]): Position => [u * cos - v * sin, u * sin + v * cos]);
 }
 
 // YOLO wants every number between 0 and 1 (rotated corners may stick out of the chip a little)
 const unit = (value: number) => round(Math.min(1, Math.max(0, value)));
 
-export type YoloMode = 'BOX' | 'OBB' | 'SEGMENT';
-
-// YOLO: one .txt per image, one line per shape, numbers relative to the image size (0-1)
-//   BOX:     class centerX centerY width height          (rotated boxes become their envelope)
-//   OBB:     class x1 y1 x2 y2 x3 y3 x4 y4               (boxes become rotated boxes at angle 0)
-//   SEGMENT: class x1 y1 x2 y2 x3 y3 ...
-// Points have no YOLO form and are left out.
-export function yoloLines(chip: ExportChip, classIndex: Map<string, number>, mode: YoloMode) {
+// YOLO OBB (Ultralytics): one .txt per image, one line per shape, corners relative to the image size (0-1)
+//   class x1 y1 x2 y2 x3 y3 x4 y4        (boxes are rotated boxes at angle 0)
+export function yoloObbLines(chip: ExportChip, classIndex: Map<string, number>) {
   const lines: string[] = [];
-  const xy = ([x, y]: Position) => [unit(x / chip.width), unit(y / chip.height)];
-  for (const shape of chip.shapes) {
-    if (shape.shapeType === 'POINT') continue;
-    const points = ring(shape);
+  for (const shape of boxShapes(chip)) {
     const index = classIndex.get(shape.labelClassId);
     if (index === undefined) continue;
-    if (mode === 'SEGMENT') {
-      lines.push([index, ...points.flatMap(xy)].join(' '));
-    } else if (mode === 'OBB') {
-      lines.push([index, ...orientedCorners(points, shape.angle).flatMap(xy)].join(' '));
-    } else {
-      const box = bounds(points);
-      const [cx, cy] = xy([box.x + box.w / 2, box.y + box.h / 2]);
-      lines.push([index, cx, cy, unit(box.w / chip.width), unit(box.h / chip.height)].join(' '));
-    }
+    const corners = orientedCorners(ring(shape), shape.angle).flatMap(([x, y]) => [unit(x / chip.width), unit(y / chip.height)]);
+    lines.push([index, ...corners].join(' '));
   }
   return lines.join('\n');
 }
@@ -66,47 +52,63 @@ export function yoloDataYaml(classes: ExportClass[]) {
   return ['path: .', 'train: images', 'val: images', 'names:', ...names, ''].join('\n');
 }
 
-// COCO: one annotations.json for all images, sizes in pixels
-export function cocoJson(chips: ExportChip[], classes: ExportClass[]) {
-  const categoryId = new Map(classes.map((labelClass, index) => [labelClass.id, index + 1]));
-  const annotations: object[] = [];
+const xml = (text: string) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const clamp = (value: number, low: number, high: number) => Math.min(high, Math.max(low, value));
 
-  chips.forEach((chip, imageIndex) => {
-    for (const shape of chip.shapes) {
-      const category_id = categoryId.get(shape.labelClassId);
-      if (!category_id) continue;
-      const common = { id: annotations.length + 1, image_id: imageIndex + 1, category_id, iscrowd: 0 };
-      if (shape.geometry.type === 'Point') {
-        const [x, y] = shape.geometry.coordinates;
-        annotations.push({ ...common, bbox: [x, y, 0, 0], area: 0, segmentation: [], keypoints: [x, y, 2], num_keypoints: 1 });
-        continue;
-      }
-      const points = ring(shape);
-      const box = bounds(points);
-      annotations.push({
-        ...common,
-        bbox: [box.x, box.y, box.w, box.h].map(round),
-        area: round(polygonArea(points)),
-        // Polygons and rotated boxes (cut to the chip) keep their outline; boxes are just their bbox
-        segmentation: shape.shapeType === 'BBOX' ? [] : [points.flat().map(round)],
-      });
+// Pascal VOC: one XML per image. bndbox is the axis-aligned box in pixels (1-based, as in VOC).
+// Rotated boxes also get a <robndbox> (centre, width, height, angle in radians, as roLabelImg writes it).
+export function vocXml(chip: ExportChip, className: Map<string, string>) {
+  const objects = boxShapes(chip).flatMap((shape) => {
+    const name = className.get(shape.labelClassId);
+    if (!name) return [];
+    const points = ring(shape);
+    const box = bounds(points);
+    const lines = [
+      '  <object>',
+      `    <name>${xml(name)}</name>`,
+      '    <pose>Unspecified</pose>',
+      `    <truncated>${box.x <= 0 || box.y <= 0 || box.x + box.w >= chip.width || box.y + box.h >= chip.height ? 1 : 0}</truncated>`,
+      '    <difficult>0</difficult>',
+      '    <bndbox>',
+      `      <xmin>${clamp(Math.round(box.x) + 1, 1, chip.width)}</xmin>`,
+      `      <ymin>${clamp(Math.round(box.y) + 1, 1, chip.height)}</ymin>`,
+      `      <xmax>${clamp(Math.round(box.x + box.w), 1, chip.width)}</xmax>`,
+      `      <ymax>${clamp(Math.round(box.y + box.h), 1, chip.height)}</ymax>`,
+      '    </bndbox>',
+    ];
+    if (shape.shapeType === 'OBB') {
+      const [c0, c1, c2] = orientedCorners(points, shape.angle);
+      const angle = ((shape.angle % Math.PI) + Math.PI) % Math.PI; // 0 ≤ angle < π
+      lines.push(
+        '    <robndbox>',
+        `      <cx>${round((c0[0] + c2[0]) / 2)}</cx>`,
+        `      <cy>${round((c0[1] + c2[1]) / 2)}</cy>`,
+        `      <w>${round(Math.hypot(c1[0] - c0[0], c1[1] - c0[1]))}</w>`,
+        `      <h>${round(Math.hypot(c2[0] - c1[0], c2[1] - c1[1]))}</h>`,
+        `      <angle>${round(angle)}</angle>`,
+        '    </robndbox>',
+      );
     }
+    lines.push('  </object>');
+    return lines;
   });
-
-  return {
-    info: { description: 'Exported from GeoAnnotator', date_created: new Date().toISOString() },
-    images: chips.map((chip, index) => ({ id: index + 1, file_name: chip.fileName, width: chip.width, height: chip.height })),
-    categories: classes.map((labelClass, index) => ({ id: index + 1, name: labelClass.name })),
-    annotations,
-  };
+  return [
+    '<annotation>',
+    '  <folder>JPEGImages</folder>',
+    `  <filename>${xml(chip.fileName)}</filename>`,
+    '  <source><database>GeoAnnotator</database></source>',
+    `  <size><width>${chip.width}</width><height>${chip.height}</height><depth>3</depth></size>`,
+    '  <segmented>0</segmented>',
+    ...objects,
+    '</annotation>',
+    '',
+  ].join('\n');
 }
 
-// Shoelace formula
-function polygonArea(points: Position[]) {
-  let sum = 0;
-  points.forEach(([x1, y1], i) => {
-    const [x2, y2] = points[(i + 1) % points.length];
-    sum += x1 * y2 - x2 * y1;
-  });
-  return Math.abs(sum) / 2;
+// A class name as one word ("Commercial building" → "Commercial_building"), for classes.txt
+export const oneWord = (name: string) => name.trim().replace(/\s+/g, '_');
+
+// classes.txt: one line per class, "id name" (the ids of YOLO's labels and data.yaml)
+export function classesTxt(classes: ExportClass[]) {
+  return [...classes.map((labelClass, index) => `${index} ${oneWord(labelClass.name)}`), ''].join('\n');
 }

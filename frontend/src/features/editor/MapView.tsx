@@ -24,6 +24,8 @@ type Props = {
   onSelect: (labelId: string | null) => void;
   onWand: (point: Position, view: PixelExtent) => Promise<unknown>;
   onBrush: (stroke: Position[], radius: number, erase: boolean) => Promise<unknown>;
+  onCut: (line: Position[]) => Promise<unknown>;
+  onPick: (labelId: string | null) => void;
   mapRef: React.RefObject<AnnotationMap | null>;
 };
 
@@ -42,6 +44,8 @@ export function MapView(props: Props) {
       onSelect: (id) => callbacks.current.onSelect(id),
       onWand: (...args) => callbacks.current.onWand(...args),
       onBrush: (...args) => callbacks.current.onBrush(...args),
+      onCut: (...args) => callbacks.current.onCut(...args),
+      onPick: (id) => callbacks.current.onPick(id),
       onPointer: setPointer,
     });
     mapRef.current = map;
@@ -75,7 +79,7 @@ export function MapView(props: Props) {
           {image.status === 'FAILED' ? 'This image could not be processed.' : 'This image is still being processed…'}
         </div>
       )}
-      {editable && tool !== 'SELECT' && (
+      {editable && (
         <div className="pointer-events-none absolute top-3 left-3 max-w-md rounded bg-black/60 px-2 py-1 text-[11px] text-white">
           <strong>{TOOL_INFO[tool].name}:</strong> {TOOL_INFO[tool].hint} Middle mouse button: move the image.
         </div>

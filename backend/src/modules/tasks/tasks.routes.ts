@@ -8,8 +8,8 @@ import { listMyTasks, getTaskDetail, updateTask, deleteTask } from './tasks.serv
 import { startTask, submitTask, reviewTask, reviewImage, approvePendingLabels } from './workflow.service';
 import { listLabels, createLabel } from '../labels/labels.service';
 import { createLabelSchema } from '../labels/labels.schemas';
-import { magicWandSchema, brushSchema } from '../labels/tools.schemas';
-import { magicWand, brushStroke } from '../labels/tools.service';
+import { magicWandSchema, brushSchema, splitSchema, mergeSchema } from '../labels/tools.schemas';
+import { magicWand, brushStroke, splitPolygon, mergePolygons } from '../labels/tools.service';
 
 // Task lists and creation per project are in projects.routes.ts (/api/projects/:id/tasks)
 export const tasksRouter = Router();
@@ -92,4 +92,16 @@ tasksRouter.post('/:id/images/:imageId/brush', async (req, res) => {
   const taskId = idParam(req.params.id, 'Task');
   const imageId = idParam(req.params.imageId, 'Image');
   res.json(await brushStroke(req.user!, taskId, imageId, brushSchema.parse(req.body)));
+});
+
+tasksRouter.post('/:id/images/:imageId/split', async (req, res) => {
+  const taskId = idParam(req.params.id, 'Task');
+  const imageId = idParam(req.params.imageId, 'Image');
+  res.json({ pieces: await splitPolygon(req.user!, taskId, imageId, splitSchema.parse(req.body)) });
+});
+
+tasksRouter.post('/:id/images/:imageId/merge', async (req, res) => {
+  const taskId = idParam(req.params.id, 'Task');
+  const imageId = idParam(req.params.imageId, 'Image');
+  res.json({ geometry: await mergePolygons(req.user!, taskId, imageId, mergeSchema.parse(req.body)) });
 });

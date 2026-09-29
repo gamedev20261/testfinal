@@ -10,9 +10,10 @@ import Point from 'ol/geom/Point';
 import { DragPan, Draw, Modify, Select, Translate } from 'ol/interaction';
 import type Interaction from 'ol/interaction/Interaction';
 import { createBox } from 'ol/interaction/Draw';
-import { noModifierKeys, primaryAction } from 'ol/events/condition';
+import { altKeyOnly, noModifierKeys, primaryAction, singleClick } from 'ol/events/condition';
 import { defaults as defaultControls } from 'ol/control/defaults';
 import type Polygon from 'ol/geom/Polygon';
+import type LineString from 'ol/geom/LineString';
 import type { Coordinate } from 'ol/coordinate';
 import type { Label, Position, ShapeGeometry, ShapeType } from '../../../types/label';
 import type { LabelClass } from '../../../types/project';
@@ -22,8 +23,9 @@ import { RotateBoxInteraction } from './rotate-interaction';
 import { BrushInteraction } from './brush-interaction';
 import { shapeStyle, pendingStyle, sketchStyle, brushStyle } from './map-styles';
 
-// SELECT edits shapes; BBOX, OBB (rotated box) and POLYGON draw; WAND (magic pen) and BRUSH make polygons
-export type Tool = 'SELECT' | 'BBOX' | 'OBB' | 'POLYGON' | 'WAND' | 'BRUSH';
+// SELECT edits shapes; BBOX, OBB (rotated box) and POLYGON draw; WAND (magic pen) and BRUSH make polygons;
+// CUT splits a polygon along a line; MERGE joins polygons that touch
+export type Tool = 'SELECT' | 'BBOX' | 'OBB' | 'POLYGON' | 'WAND' | 'BRUSH' | 'CUT' | 'MERGE';
 type DrawTool = 'BBOX' | 'OBB' | 'POLYGON';
 
 // [minX, minY, maxX, maxY] in image pixels
@@ -37,6 +39,8 @@ export type MapCallbacks = {
   onPointer: (position: { x: number; y: number } | null) => void;
   onWand: (point: Position, view: PixelExtent) => Promise<unknown>;
   onBrush: (stroke: Position[], radius: number, erase: boolean) => Promise<unknown>;
+  onCut: (line: Position[]) => Promise<unknown>;
+  onPick: (labelId: string | null) => void; // a click with the merge tool
 };
 
 type ShapeGeom = Point | Polygon;
@@ -104,7 +108,9 @@ export class AnnotationMap {
     // New corners only on polygons.
     this.modify = new Modify({
       features: this.select.getFeatures(),
-      insertVertexCondition: () => this.labels.get(this.selectedId ?? '')?.shapeType === 'POLYGON',
+      insertVertexCondition: () => this.selectedIsPolygon(),
+      // Alt+click a corner of a polygon to delete it (right-click too, see below). A polygon keeps at least 3.
+      deleteCondition: (event) => this.selectedIsPolygon() && altKeyOnly(event) && singleClick(event),
     });
     this.translate = new Translate({ features: this.select.getFeatures() });
     this.rotate = new RotateBoxInteraction({
@@ -132,10 +138,21 @@ export class AnnotationMap {
     this.map.addInteraction(this.middlePan);
     const viewport = this.map.getViewport();
     viewport.addEventListener('mousedown', (event) => event.button === 1 && event.preventDefault()); // no browser auto-scroll
+    // Right-click on a corner of the selected polygon deletes it (instead of the browser menu)
+    viewport.addEventListener('contextmenu', (event) => {
+      event.preventDefault();
+      if (this.activeTool() === 'SELECT' && this.editable && this.selectedIsPolygon()) {
+        this.modify.removePoint(this.map.getEventCoordinate(event));
+      }
+    });
 
     // Magic pen: a click asks the server for the object's outline
     this.map.on('click', (event) => {
       if (this.activeTool() === 'WAND') void this.useWand(event.coordinate);
+      if (this.activeTool() === 'MERGE') {
+        const feature = this.map.forEachFeatureAtPixel(event.pixel, (f) => f, { layerFilter: (layer) => layer === this.shapeLayer, hitTolerance: 5 });
+        this.callbacks.onPick((feature?.getId() as string | undefined) ?? null);
+      }
     });
 
     // Pixel under the mouse, shown under the map
@@ -254,6 +271,10 @@ export class AnnotationMap {
     this.map.setTarget(undefined);
   }
 
+  private selectedIsPolygon() {
+    return this.labels.get(this.selectedId ?? '')?.shapeType === 'POLYGON';
+  }
+
   private activeTool(): Tool {
     return this.editable ? this.tool : 'SELECT';
   }
@@ -286,6 +307,19 @@ export class AnnotationMap {
       });
       this.draw = draw;
       this.addBelowPan(draw);
+    }
+    if (tool === 'CUT') {
+      // Click points across the shape, double-click to finish the cut
+      const cut = new Draw({ type: 'LineString', style: sketchStyle, condition: noModifierKeysLeftButton });
+      cut.on('drawstart', () => (this.drawing = true));
+      cut.on('drawabort', () => (this.drawing = false));
+      cut.on('drawend', (event) => {
+        this.drawing = false;
+        const line = (event.feature.getGeometry() as LineString).getCoordinates().map(toPixel);
+        void this.callbacks.onCut(line);
+      });
+      this.draw = cut;
+      this.addBelowPan(cut);
     }
     if (tool === 'BRUSH') {
       // The selected polygon stays selected: strokes are added to it (or erased from it)

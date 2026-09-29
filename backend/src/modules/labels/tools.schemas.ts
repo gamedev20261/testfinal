@@ -23,3 +23,17 @@ export const brushSchema = z.object({
 
 export type MagicWandInput = z.infer<typeof magicWandSchema>;
 export type BrushInput = z.infer<typeof brushSchema>;
+
+// POST /api/tasks/:taskId/images/:imageId/split
+export const splitSchema = z.object({
+  geometry: polygon, // the polygon to cut
+  line: z.array(position).min(2, 'Draw a line across the shape').max(1000), // the cut, drawn across it
+});
+
+// POST /api/tasks/:taskId/images/:imageId/merge
+export const mergeSchema = z.object({
+  geometries: z.array(polygon).min(2, 'Choose two shapes to merge').max(20),
+});
+
+export type SplitInput = z.infer<typeof splitSchema>;
+export type MergeInput = z.infer<typeof mergeSchema>;

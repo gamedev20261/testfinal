@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import { tasksApi, type NewLabel } from '../../api/tasks';
 import { labelsApi } from '../../api/labels';
 import { apiErrorMessage } from '../../api/client';
-import type { Label, ShapeGeometry } from '../../types/label';
+import type { Label, PolygonGeometry, ShapeGeometry } from '../../types/label';
 import { useEditorStore } from './editor-store';
 import { labelsKey, taskKey } from './queries';
 
@@ -74,6 +74,60 @@ export function useLabelActions(taskId: string, imageId: string) {
         const before = current(id)!.labelClassId;
         await update(id, { labelClassId });
         record({ undo: () => update(id, { labelClassId: before }), redo: () => update(id, { labelClassId }) });
+      }),
+
+    // Cut: the shape becomes the first piece, the other pieces are new shapes of the same class. One undo step.
+    split: (id: string, pieces: PolygonGeometry[]) =>
+      attempt(async () => {
+        const before = current(id)!;
+        const [first, ...rest] = pieces;
+        await update(id, { geometry: first });
+        const created: Label[] = [];
+        try {
+          for (const geometry of rest) {
+            const label = await tasksApi.createLabel(taskId, imageId, { labelClassId: before.labelClassId, shapeType: 'POLYGON', geometry });
+            put(label);
+            created.push(label);
+          }
+        } catch (error) {
+          for (const label of created) await remove(label.id);
+          await update(id, { geometry: before.geometry });
+          throw error;
+        }
+        refreshTask();
+        record({
+          undo: async () => {
+            for (const label of created) await remove(label.id);
+            await update(id, { geometry: before.geometry });
+          },
+          redo: async () => {
+            await update(id, { geometry: first });
+            for (const label of created) await restore(label.id);
+          },
+        });
+      }),
+
+    // Merge: the other shape is deleted first (else the joined shape would "contain" it), then the target grows
+    merge: (targetId: string, otherId: string, geometry: PolygonGeometry) =>
+      attempt(async () => {
+        const before = current(targetId)!.geometry;
+        await remove(otherId);
+        try {
+          await update(targetId, { geometry });
+        } catch (error) {
+          await restore(otherId);
+          throw error;
+        }
+        record({
+          undo: async () => {
+            await update(targetId, { geometry: before });
+            await restore(otherId);
+          },
+          redo: async () => {
+            await remove(otherId);
+            await update(targetId, { geometry });
+          },
+        });
       }),
 
     remove: (id: string) =>

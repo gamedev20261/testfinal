@@ -68,35 +68,3 @@ export async function findChipShapes(projectId: string, image: ExportImage, chip
   `);
   return { chipW, chipH, shapes: rows };
 }
-
-// For GeoJSON: every shape of the image placed on the map.
-//   GDAL geotransform → ST_Affine(a, b, d, e, xoff, yoff) = (gt1, gt2, gt4, gt5, gt0, gt3)
-//   (PostgreSQL arrays start at 1, so gt[2] is gt1)
-export async function findMapShapes(projectId: string, imageId: string) {
-  const { rows } = await db.execute<{
-    id: string;
-    className: string;
-    color: string;
-    shapeType: ShapeType;
-    reviewStatus: string;
-    taskName: string;
-    geometry: Geometry;
-  }>(sql`
-    SELECT s.id, lc.name AS "className", lc.color, s.shape_type AS "shapeType",
-      s.review_status AS "reviewStatus", t.name AS "taskName",
-      ST_AsGeoJSON(CASE
-        WHEN i.footprint IS NOT NULL THEN ST_Transform(ST_SetSRID(
-          ST_Affine(s.geom, gt[2], gt[3], gt[5], gt[6], gt[1], gt[4]), i.srid), 4326)
-        WHEN gt IS NOT NULL THEN ST_Affine(s.geom, gt[2], gt[3], gt[5], gt[6], gt[1], gt[4])
-        ELSE s.geom
-      END, 9)::json AS geometry
-    FROM (${exportedShapes(projectId)}) s
-    JOIN images i ON i.id = s.image_id
-    CROSS JOIN LATERAL (SELECT i.geo_transform AS gt) g
-    JOIN label_classes lc ON lc.id = s.label_class_id
-    JOIN tasks t ON t.id = s.task_id
-    WHERE s.image_id = ${imageId}
-    ORDER BY s.created_at
-  `);
-  return rows;
-}

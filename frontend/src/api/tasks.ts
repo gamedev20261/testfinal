@@ -61,6 +61,15 @@ export const tasksApi = {
     return data;
   },
 
+  async split(id: string, imageId: string, geometry: PolygonGeometry, line: Position[]) {
+    const { data } = await api.post<{ pieces: PolygonGeometry[] }>(`/tasks/${id}/images/${imageId}/split`, { geometry, line });
+    return data.pieces;
+  },
+  async merge(id: string, imageId: string, geometries: PolygonGeometry[]) {
+    const { data } = await api.post<{ geometry: PolygonGeometry }>(`/tasks/${id}/images/${imageId}/merge`, { geometries });
+    return data.geometry;
+  },
+
   async approveAll(id: string, imageId: string) {
     const { data } = await api.post<{ approved: number }>(`/tasks/${id}/images/${imageId}/labels/approve-all`);
     return data.approved;

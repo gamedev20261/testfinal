@@ -6,9 +6,19 @@ import type { Task } from '../types/task';
 export type CreateProjectInput = { name: string; description: string; type: ProjectType; labelClassIds: string[] };
 export type UpdateProjectInput = Partial<{ name: string; description: string; type: ProjectType; status: ProjectStatus }>;
 export type TaskInput = { name: string; description: string; annotatorId: string; auditorId: string; imageIds: string[] };
-export type ExportFormat = 'YOLO' | 'YOLO_OBB' | 'COCO' | 'GEOJSON' | 'MASKS';
-// chipSize 0 = whole images; mergeClasses only matters for MASKS
-export type ExportOptions = { format: ExportFormat; chipSize: number; includeImages: boolean; mergeClasses: boolean };
+// Detection: YOLO_OBB or VOC (Pascal VOC XML); segmentation: MASKS
+export type ExportFormat = 'YOLO_OBB' | 'VOC' | 'MASKS';
+export type GeometricAugmentation = 'FLIP_H' | 'FLIP_V' | 'ROTATE_90' | 'ROTATE' | 'ZOOM';
+export type ColorAugmentation = 'BRIGHTNESS' | 'CONTRAST' | 'SATURATION' | 'HUE' | 'BLUR' | 'SHARPEN' | 'NOISE' | 'GRAYSCALE';
+// chipSize 0 = whole images; mergeClasses only matters for MASKS; augmentCopies 0 = no augmentation
+export type ExportOptions = {
+  format: ExportFormat;
+  chipSize: number;
+  mergeClasses: boolean;
+  augmentCopies: number;
+  geometric: GeometricAugmentation[];
+  color: ColorAugmentation[];
+};
 
 // /api/projects and everything inside one project
 export const projectsApi = {
@@ -89,8 +99,10 @@ export const projectsApi = {
     const params = new URLSearchParams({
       format: options.format,
       chipSize: String(options.chipSize),
-      includeImages: String(options.includeImages),
       mergeClasses: String(options.mergeClasses),
+      augmentCopies: String(options.augmentCopies),
+      geometric: options.geometric.join(','),
+      color: options.color.join(','),
     });
     return `/api/projects/${id}/export?${params}`;
   },

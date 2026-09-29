@@ -9,7 +9,7 @@ import { SHARP_OPTIONS } from '../images/processing/read-raster';
 import type { PublicUser } from '../auth/auth.service';
 import { findTaskImage } from './labels.service';
 import { growRegion, openRegion, traceOutline, countInside } from './magic-wand';
-import type { MagicWandInput, BrushInput } from './tools.schemas';
+import type { MagicWandInput, BrushInput, SplitInput, MergeInput } from './tools.schemas';
 
 // Segmentation helpers. They only compute a polygon; the editor then saves it like a drawn one
 // (so undo, validation and review work the same).
@@ -100,6 +100,35 @@ export async function brushStroke(user: PublicUser, taskId: string, imageId: str
   const geometry = await tidyPolygon(combined, size, tolerance);
   if (!geometry) return { action: 'delete' }; // everything was erased
   return { action: 'update', geometry };
+}
+
+const asGeometry = (geojson: object) => sql`ST_MakeValid(ST_SetSRID(ST_GeomFromGeoJSON(${JSON.stringify(geojson)}), 0))`;
+
+// Cut: the polygon split along a line drawn across it. The pieces, largest first.
+export async function splitPolygon(user: PublicUser, taskId: string, imageId: string, input: SplitInput) {
+  await editableImage(user, taskId, imageId);
+  const line = asGeometry({ type: 'LineString', coordinates: input.line });
+  const { rows } = await db.execute<{ geojson: PolygonGeometry }>(sql`
+    SELECT ST_AsGeoJSON(ST_MakePolygon(ST_ExteriorRing(part.geom)), 3)::json AS geojson
+    FROM ST_Dump(ST_CollectionExtract(ST_Split(${asGeometry(input.geometry)}, ${line}), 3)) part
+    WHERE ST_Area(part.geom) >= 1
+    ORDER BY ST_Area(part.geom) DESC
+  `);
+  if (rows.length < 2) throw new HttpError(400, 'Draw the cut all the way across the shape, from outside to outside');
+  return rows.map((row) => row.geojson);
+}
+
+// Merge: shapes that touch or overlap become one polygon (holes between them are filled)
+export async function mergePolygons(user: PublicUser, taskId: string, imageId: string, input: MergeInput) {
+  const size = await editableImage(user, taskId, imageId);
+  const union = sql`ST_Union(ARRAY[${sql.join(input.geometries.map(asGeometry), sql`, `)}])`;
+  const { rows } = await db.execute<{ parts: number }>(sql`
+    SELECT count(*)::int AS parts FROM ST_Dump(ST_CollectionExtract(${union}, 3)) part WHERE ST_Area(part.geom) >= 1
+  `);
+  if (rows[0].parts !== 1) throw new HttpError(400, 'Only shapes that touch or overlap can be merged');
+  const geometry = await tidyPolygon(union, size, 0.2);
+  if (!geometry) throw new HttpError(400, 'Only shapes that touch or overlap can be merged');
+  return geometry;
 }
 
 // Makes any outline a label polygon: valid, cut to the image, its largest piece without holes,

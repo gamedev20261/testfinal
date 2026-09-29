@@ -5,7 +5,7 @@ import { Tabs } from '../../components/ui/Tabs';
 import { LoadError, Spinner } from '../../components/ui/States';
 import { tasksApi } from '../../api/tasks';
 import { apiErrorMessage } from '../../api/client';
-import type { PolygonGeometry, Position, ShapeGeometry, ShapeType } from '../../types/label';
+import type { Label, PolygonGeometry, Position, ShapeGeometry, ShapeType } from '../../types/label';
 import type { TaskDetail } from '../../types/task';
 import { useTaskDetail, useImageLabels } from './queries';
 import { useEditorStore } from './editor-store';
@@ -107,6 +107,43 @@ function Editor({ detail }: { detail: TaskDetail }) {
     }
   }
 
+  // Cut: the selected polygon, or every polygon the line crosses, is split along the line
+  async function onCut(line: Position[]) {
+    const [xs, ys] = [line.map(([x]) => x), line.map(([, y]) => y)];
+    const crosses = (l: Label) => {
+      const ring = l.geometry.type === 'Polygon' ? l.geometry.coordinates[0] : [];
+      return ring.some(([x]) => x >= Math.min(...xs)) && ring.some(([x]) => x <= Math.max(...xs)) &&
+        ring.some(([, y]) => y >= Math.min(...ys)) && ring.some(([, y]) => y <= Math.max(...ys));
+    };
+    const selected = labels.find((l) => l.id === store.selectedId && l.shapeType === 'POLYGON');
+    const targets = selected ? [selected] : labels.filter((l) => l.shapeType === 'POLYGON' && crosses(l));
+    let cut = 0;
+    let lastError: unknown = null;
+    for (const target of targets) {
+      try {
+        const pieces = await tasksApi.split(task.id, image.id, target.geometry as PolygonGeometry, line);
+        if (await actions.split(target.id, pieces)) cut++;
+      } catch (error) {
+        lastError = error; // this shape was not crossed from side to side
+      }
+    }
+    if (cut === 0) toast.error(apiErrorMessage(lastError, 'Draw the cut all the way across a shape'));
+  }
+
+  // Merge: the first clicked shape is the target; each next shape that touches it joins it
+  async function onPick(labelId: string | null) {
+    const picked = labels.find((l) => l.id === labelId && l.shapeType === 'POLYGON');
+    const target = labels.find((l) => l.id === store.selectedId && l.shapeType === 'POLYGON');
+    if (!picked) return;
+    if (!target || target.id === picked.id) return store.select(picked.id);
+    try {
+      const geometry = await tasksApi.merge(task.id, image.id, [target.geometry, picked.geometry] as PolygonGeometry[]);
+      await actions.merge(target.id, picked.id, geometry);
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Could not merge these shapes'));
+    }
+  }
+
   // 1-9 or a click in the classes list: change the selected shape, or the class for new shapes
   function pickClass(classId: string) {
     store.setActiveClass(classId);
@@ -168,6 +205,8 @@ function Editor({ detail }: { detail: TaskDetail }) {
             onSelect={store.select}
             onWand={onWand}
             onBrush={onBrush}
+            onCut={onCut}
+            onPick={(id) => void onPick(id)}
             mapRef={mapRef}
           />
         </div>

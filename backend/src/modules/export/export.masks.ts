@@ -1,6 +1,6 @@
 import sharp from 'sharp';
 import type { Position, PolygonGeometry } from '../../db/schema';
-import type { ExportChip, ExportClass } from './export.writers';
+import { oneWord, type ExportChip, type ExportClass } from './export.writers';
 
 // Segmentation masks: PNG images the size of the chip, background black.
 //   merged:    one RGB mask per chip, each class painted in its own colour
@@ -65,33 +65,15 @@ export function classMask(chip: ExportChip, classId: string) {
   return png(pixels, chip, 1);
 }
 
-// classes.json: what each colour or folder means
-export function maskLegend(classes: MaskClass[], folders: Map<string, string>, merged: boolean) {
-  return {
-    background: merged ? { rgb: [0, 0, 0] } : { value: 0 },
-    classes: classes.map((labelClass) =>
-      merged
-        ? { name: labelClass.name, color: labelClass.color, rgb: hexToRgb(labelClass.color) }
-        : { name: labelClass.name, folder: `masks/${folders.get(labelClass.id)}`, value: 255 },
-    ),
-  };
-}
-
-export function maskReadme(merged: boolean) {
+// classes.txt: id 0 is the background, then one line per class with its mask colour (merged)
+// or its folder (one folder per class, the class white)
+export function maskClassesTxt(classes: MaskClass[], folders: Map<string, string>, merged: boolean) {
   const lines = merged
-    ? [
-        'Segmentation masks, all classes merged',
-        '',
-        'images/<name>.jpg   the image chips',
-        'masks/<name>.png    one mask per chip: black background, each class in its own colour',
-        'classes.json        the colour of each class',
-      ]
-    : [
-        'Segmentation masks, one folder per class',
-        '',
-        'images/<name>.jpg           the image chips',
-        'masks/<class>/<name>.png    one mask per chip and class: the class white (255), everything else black (0)',
-        'classes.json                the folder of each class',
-      ];
-  return [...lines, '', 'A mask has the same name and size as its image chip.', ''].join('\n');
+    ? ['# id name red green blue (the colour of the class in masks/)', '0 background 0 0 0']
+    : ['# id name folder (in each mask the class is white, 255, and everything else black, 0)', '0 background -'];
+  classes.forEach((labelClass, index) => {
+    const detail = merged ? hexToRgb(labelClass.color).join(' ') : `masks/${folders.get(labelClass.id)}`;
+    lines.push(`${index + 1} ${oneWord(labelClass.name)} ${detail}`);
+  });
+  return [...lines, ''].join('\n');
 }

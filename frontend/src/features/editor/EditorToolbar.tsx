@@ -1,5 +1,5 @@
 import { Link } from 'react-router';
-import { ChevronLeft, ChevronRight, Eraser, Hexagon, MousePointer2, Paintbrush, Redo2, Square, Undo2, Type, WandSparkles } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Combine, Eraser, Hexagon, MousePointer2, Paintbrush, Redo2, Scissors, Square, Undo2, Type, WandSparkles } from 'lucide-react';
 import { cn } from '../../lib/cn';
 import { Select } from '../../components/ui/Select';
 import { TaskStatusBadge } from '../../components/task/TaskStatus';
@@ -18,6 +18,8 @@ const TOOL_ICON: Record<Tool, React.ComponentType<{ size: number }>> = {
   POLYGON: Hexagon,
   WAND: WandSparkles,
   BRUSH: Paintbrush,
+  CUT: Scissors,
+  MERGE: Combine,
 };
 
 type Props = {

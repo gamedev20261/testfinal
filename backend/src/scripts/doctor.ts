@@ -6,6 +6,7 @@ import { z } from 'zod';
 import type { Pool } from 'pg';
 import { envSchema } from '../config/env-schema';
 import { isSupportedNode, NODE_REQUIREMENT } from '../config/node-version';
+import { errorMessage } from '../lib/error-message';
 
 let failed = false;
 
@@ -79,6 +80,7 @@ async function main() {
       return;
     }
     ok(`PostGIS ${postgis.rows[0].default_version} available`);
+    if (!(await postgisCanBeEnabled(pool))) return;
 
     // 7. The tables
     const pending = await pendingMigrations(pool);
@@ -150,3 +152,33 @@ main()
     console.log(failed ? '\nFix the [FAIL] line above, then run "npm run doctor" again.' : '\nAll good! Start the backend with "npm run dev", and the frontend with "npm run dev" in frontend/.');
     process.exitCode = failed ? 1 : 0;
   });
+
+// Installed is not always usable (wrong PostgreSQL version, missing rights…).
+// Tries to switch PostGIS on inside a transaction that is undone afterwards.
+async function postgisCanBeEnabled(pool: Pool) {
+  const enabled = await pool.query("SELECT extversion FROM pg_extension WHERE extname = 'postgis'");
+  if (enabled.rowCount) {
+    ok(`PostGIS ${enabled.rows[0].extversion} is enabled in this database`);
+    return true;
+  }
+  const { rows } = await pool.query('SHOW server_version');
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('CREATE EXTENSION postgis');
+    ok('PostGIS can be enabled ("npm run db:migrate" does it)');
+    return true;
+  } catch (error) {
+    const reason = errorMessage(error);
+    const fix = reason.includes('permission denied')
+      ? 'use the "postgres" user in DATABASE_URL (backend/.env)'
+      : /could not (load library|access file)|incompatible/.test(reason)
+        ? `PostGIS was installed for another PostgreSQL version. Your server is PostgreSQL ${rows[0].server_version}: install the PostGIS bundle for exactly that version (Stack Builder → your server on port 5432)`
+        : 'copy this message and ask for help';
+    fail(`PostGIS is installed but cannot be enabled (PostgreSQL ${rows[0].server_version})\n       Reason: ${reason}`, fix);
+    return false;
+  } finally {
+    await client.query('ROLLBACK');
+    client.release();
+  }
+}

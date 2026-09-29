@@ -45,6 +45,12 @@ function explain(error: unknown): string {
       '  • Docker: docker compose up -d (the image already has PostGIS)'
     );
   }
+  if (/could not (load library|access file)|incompatible/.test(message)) {
+    return (
+      `${message}\n\nPostGIS is installed, but not for the PostgreSQL version that is running on port 5432.\n` +
+      'Run "npm run doctor" to see your server version, then install the PostGIS bundle for exactly that version.'
+    );
+  }
   if (message.includes('permission denied to create extension')) {
     return 'Your database user may not create extensions. Use the "postgres" user in DATABASE_URL, or run "CREATE EXTENSION postgis;" once in pgAdmin.';
   }

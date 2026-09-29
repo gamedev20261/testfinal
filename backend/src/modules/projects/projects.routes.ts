@@ -15,6 +15,9 @@ import {
 } from './projects.service';
 import { listMembers, addMembers, removeMember } from './members.service';
 import { getProjectStats } from './stats.service';
+import { listProjectImages, addUploadedImages } from '../images/images.service';
+import { uploadImages, uploadedFiles, removeTempFiles } from '../images/upload';
+import { HttpError } from '../../lib/http-error';
 
 export const projectsRouter = Router();
 projectsRouter.use(requireAuth);
@@ -76,6 +79,25 @@ projectsRouter.put('/:id/label-classes', admin, async (req, res) => {
   const project = await findProjectForUser(req.user!, idParam(req.params.id, 'Project'));
   const { labelClassIds } = setLabelClassesSchema.parse(req.body);
   res.json({ labelClasses: await setProjectLabelClasses(project.id, labelClassIds) });
+});
+
+// ── Imagery ──
+
+projectsRouter.get('/:id/images', async (req, res) => {
+  const project = await findProjectForUser(req.user!, idParam(req.params.id, 'Project'));
+  res.json({ images: await listProjectImages(project.id) });
+});
+
+// multipart/form-data with one or more "files"
+projectsRouter.post('/:id/images', admin, uploadImages, async (req, res) => {
+  const files = uploadedFiles(req.files);
+  try {
+    const project = await findProjectForUser(req.user!, idParam(req.params.id, 'Project'));
+    if (files.length === 0) throw new HttpError(400, 'Choose at least one image file');
+    res.status(201).json({ images: await addUploadedImages(project.id, files, req.user!.id) });
+  } finally {
+    await removeTempFiles(files); // saved files were already moved away
+  }
 });
 
 // ── Stats ──

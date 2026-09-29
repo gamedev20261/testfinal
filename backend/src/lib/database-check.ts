@@ -39,7 +39,7 @@ export async function checkDatabaseConnection() {
   const problem = await findDatabaseProblem();
   if (!problem) {
     logger.info(`Database connected: ${target}`);
-    return;
+    return true;
   }
   logger.error(
     `Cannot connect to the database ${target}\n` +
@@ -47,4 +47,5 @@ export async function checkDatabaseConnection() {
       `  Fix: ${databaseFix(problem)}\n` +
       `  More help: run "npm run doctor"`,
   );
+  return false;
 }

@@ -9,4 +9,7 @@ export const envSchema = z.object({
   DATABASE_URL: z.url(),
   JWT_SECRET: z.string().min(32, 'must be at least 32 characters long'),
   SESSION_HOURS: z.coerce.number().positive().default(24),
+  UPLOAD_DIR: z.string().default('uploads'), // where uploaded images and their tiles are stored
+  MAX_UPLOAD_MB: z.coerce.number().int().positive().default(2048), // per file
+  IMAGE_WORKERS: z.coerce.number().int().min(1).max(8).default(1), // images processed at the same time
 });

@@ -11,7 +11,7 @@ happens in the Admin Portal.
 In this patch it only **checks** what you type. When the form is valid it logs a line in
 the browser console; patch 06 will send it to `POST /api/auth/login`.
 
-![The login screen](../../../../patches/images/05-login.png)
+![The login screen](../../../../../patches/images/05-login.png)
 
 ## Where it lives
 

@@ -1,0 +1,31 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/inter';
+
+/* Design tokens: the colours and font of the original GeoAnnotator.
+   Each --color-NAME becomes classes like bg-NAME, text-NAME and border-NAME,
+   e.g. --color-primary → bg-primary, text-primary. */
+@theme {
+  --font-sans: 'Inter Variable', system-ui, sans-serif;
+
+  --color-primary: #1b6ef3;
+  --color-primary-dark: #1251c1;
+  --color-primary-light: #eef2ff;
+
+  --color-surface: #ffffff;
+  --color-surface-alt: #f5f7fa;
+  --color-border: #e2e8f0;
+
+  --color-text-primary: #1a202c;
+  --color-text-secondary: #718096;
+
+  --color-success: #38a169;
+  --color-warning: #d69e2e;
+  --color-danger: #e53e3e;
+}
+
+/* Page-wide defaults */
+@layer base {
+  body {
+    @apply bg-surface-alt text-text-primary antialiased;
+  }
+}

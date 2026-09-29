@@ -23,6 +23,11 @@ npm install
 npm run db:migrate
 npm run db:seed        # creates the admin from ADMIN_EMAIL / ADMIN_PASSWORD in .env
 npm run dev
+
+# 3. Frontend: http://localhost:5173 (in a second terminal)
+cd frontend
+npm install
+npm run dev
 ```
 
 ## Progress
@@ -34,6 +39,6 @@ npm run dev
 | 01 | Backend: first server (`/api/health`) | [learn/patches/01-backend-first-server.md](learn/patches/01-backend-first-server.md) |
 | 02 | Database and first admin user | [learn/patches/02-database-and-first-admin.md](learn/patches/02-database-and-first-admin.md) |
 | 03 | Login API + Postman | [learn/patches/03-login-api.md](learn/patches/03-login-api.md) |
-| 04 | Frontend: first page | ⏳ |
+| 04 | Frontend: first page | [learn/patches/04-frontend-first-page.md](learn/patches/04-frontend-first-page.md) |
 | 05 | Login screen design | ⏳ |
 | 06 | Connect the screen to the API | ⏳ |

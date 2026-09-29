@@ -1,6 +1,6 @@
 # `backend/package.json`
 
-> Added in **patch 01** · Changed in **patch 02** · [View the file](../../../backend/package.json) · Background: [Node, npm and TypeScript](../../concepts/node-npm-typescript.md)
+> Added in **patch 01** · Changed in **patches 02, 03** · [View the file](../../../backend/package.json) · Background: [Node, npm and TypeScript](../../concepts/node-npm-typescript.md)
 
 ## What it is for
 
@@ -41,6 +41,9 @@ Documents that Node 22 or newer is needed (we use `process.loadEnvFile()`, added
 | `@prisma/client` | The runtime part of Prisma, used by the generated client | 02 |
 | `@prisma/adapter-pg` | Connects Prisma to PostgreSQL through the `pg` driver | 02 |
 | `bcryptjs` | Hashes and checks passwords | 02 |
+| `jsonwebtoken` | Creates and checks the signed login tokens (JWT) | 03 |
+| `cookie-parser` | Reads the `Cookie` header into `req.cookies` | 03 |
+| `express-rate-limit` | Limits failed login attempts | 03 |
 
 ### Dev dependencies (only for development)
 
@@ -49,6 +52,7 @@ Documents that Node 22 or newer is needed (we use `process.loadEnvFile()`, added
 | `typescript` | The type checker (`tsc`) | 01 |
 | `tsx` | Runs `.ts` files directly, restarts on save | 01 |
 | `@types/node`, `@types/express` | Type descriptions for Node and Express, so the editor knows what `req`, `res` and `process` contain | 01 |
+| `@types/jsonwebtoken`, `@types/cookie-parser` | Type descriptions for those two packages | 03 |
 | `pino-pretty` | Makes log lines readable in the terminal | 01 |
 | `prisma` | The Prisma command-line tool (`migrate`, `generate`, `studio`, `db seed`) | 02 |
 

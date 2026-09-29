@@ -1,10 +1,13 @@
 # `backend/src/app.ts`
 
-> Added in **patch 01** · Changed in **patch 02** · [View the code](../../../../backend/src/app.ts) · Background: [How the web works](../../../concepts/how-the-web-works.md)
+> Added in **patch 01** · Changed in **patches 02, 03** · [View the code](../../../../backend/src/app.ts) · Background: [How the web works](../../../concepts/how-the-web-works.md)
 
 > **Patch 02 change:** the health route moved into its own router,
 > [`modules/health/health.routes.ts`](modules/health/health.routes.ts.md), and is mounted
 > with `app.use('/api/health', healthRouter)`. Section 2 below explains both styles.
+>
+> **Patch 03 change:** `cookieParser()` middleware, the auth router under `/api/auth`, and
+> the error handler as the very last `app.use` (section 4).
 
 ## What it is for
 
@@ -36,7 +39,8 @@ export function createApp() {
 |---|---|
 | `helmet()` | Adds about a dozen **security headers** to every response. For example `X-Content-Type-Options: nosniff` stops browsers guessing file types, and `X-Frame-Options` stops other sites from embedding ours in a frame. You can see them in Postman's *Headers* tab. |
 | `requestLogger` | Our own middleware: one log line per request ([explained here](middleware/request-logger.ts.md)). |
-| `express.json()` | When a request has a JSON body (`Content-Type: application/json`), it turns the text into a JavaScript object at `req.body`. Without it, `req.body` would be `undefined`. We need it from patch 03 (login sends email + password as JSON). |
+| `express.json()` | When a request has a JSON body (`Content-Type: application/json`), it turns the text into a JavaScript object at `req.body`. Without it, `req.body` would be `undefined`. The login route reads the email and password from it. |
+| `cookieParser()` | *(patch 03)* Reads the `Cookie:` header (`session=eyJ…; other=1`) into an object at `req.cookies`, so [`requireAuth`](middleware/require-auth.ts.md) can read `req.cookies.session`. |
 
 **Order matters.** A middleware only sees requests that the ones above it passed on.
 
@@ -69,6 +73,12 @@ only mounts it:
 "Every request whose path starts with `/api/health` goes to `healthRouter`." This keeps
 `app.ts` short: one line per feature, however many routes the feature has.
 
+Patch 03 adds the second feature the same way:
+
+```ts
+  app.use('/api/auth', authRouter);   // → /api/auth/login, /api/auth/logout, /api/auth/me
+```
+
 ### 3. The "not found" handler
 
 ```ts
@@ -83,6 +93,17 @@ before `.json(...)` sends the body.
 
 Without this, Express would answer with an HTML page. An API should always answer
 with JSON, so the frontend can read the error the same way every time.
+
+### 4. The error handler (patch 03)
+
+```ts
+  app.use(errorHandler);
+```
+
+Any route or middleware can `throw` an error; Express then skips the normal middleware and
+jumps to the *error handler*: a middleware with four parameters `(err, req, res, next)`.
+It must be added **after all routes**, so it's the last `app.use`. What it answers is
+explained in [`error-handler.ts`](middleware/error-handler.ts.md).
 
 ## What happens when you call `GET /api/health`
 

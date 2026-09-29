@@ -1,6 +1,6 @@
 # `backend/src/config/env.ts`
 
-> Added in **patch 01** · Changed in **patch 02** (`DATABASE_URL`) · [View the code](../../../../../backend/src/config/env.ts)
+> Added in **patch 01** · Changed in **patch 02** (`DATABASE_URL`), **patch 03** (`JWT_SECRET`, `SESSION_HOURS`) · [View the code](../../../../../backend/src/config/env.ts)
 
 ## What it is for
 
@@ -43,6 +43,8 @@ const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3001),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
   DATABASE_URL: z.url(),
+  JWT_SECRET: z.string().min(32, 'must be at least 32 characters long'),
+  SESSION_HOURS: z.coerce.number().positive().default(24),
 });
 ```
 
@@ -54,6 +56,9 @@ const envSchema = z.object({
 - `LOG_LEVEL` must be one of four words; default `'info'`.
 - `DATABASE_URL` (patch 02) must be a valid URL. It has **no default**: without it, the
   server can't work, so a missing value stops it at startup.
+- `JWT_SECRET` (patch 03) must be at least 32 characters. A short secret could be guessed
+  by trying every possibility, and then anyone could forge a login. No default, on purpose.
+- `SESSION_HOURS` (patch 03): how long a login lasts; default 24.
 
 We will use Zod the same way to check what users send to the API.
 

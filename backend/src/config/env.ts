@@ -14,6 +14,8 @@ const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3001),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
   DATABASE_URL: z.url(),
+  JWT_SECRET: z.string().min(32, 'must be at least 32 characters long'),
+  SESSION_HOURS: z.coerce.number().positive().default(24),
 });
 
 const result = envSchema.safeParse(process.env);

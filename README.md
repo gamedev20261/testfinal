@@ -18,7 +18,7 @@ docker compose up -d
 
 # 2. Backend: http://localhost:3001
 cd backend
-cp .env.example .env
+cp .env.example .env   # then set your own JWT_SECRET
 npm install
 npm run db:migrate
 npm run db:seed        # creates the admin from ADMIN_EMAIL / ADMIN_PASSWORD in .env
@@ -33,7 +33,7 @@ npm run dev
 |---|---|---|
 | 01 | Backend: first server (`/api/health`) | [learn/patches/01-backend-first-server.md](learn/patches/01-backend-first-server.md) |
 | 02 | Database and first admin user | [learn/patches/02-database-and-first-admin.md](learn/patches/02-database-and-first-admin.md) |
-| 03 | Login API + Postman | ⏳ |
+| 03 | Login API + Postman | [learn/patches/03-login-api.md](learn/patches/03-login-api.md) |
 | 04 | Frontend: first page | ⏳ |
 | 05 | Login screen design | ⏳ |
 | 06 | Connect the screen to the API | ⏳ |

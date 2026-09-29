@@ -3,6 +3,7 @@ import { Client, Pool } from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { env } from '../config/env';
+import { errorMessage } from '../lib/error-message';
 
 // Connects to the built-in "postgres" database to create ours when it doesn't exist yet
 async function createDatabaseIfMissing() {
@@ -33,7 +34,7 @@ async function removeOldPrismaTables(pool: Pool) {
 }
 
 function explain(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
+  const message = errorMessage(error);
   if (message.includes('postgis.control') || message.includes('extension "postgis" is not available')) {
     return (
       'PostGIS is not installed on your PostgreSQL server. Install it, then run "npm run db:migrate" again:\n' +

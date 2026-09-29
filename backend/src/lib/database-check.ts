@@ -39,12 +39,24 @@ export async function checkDatabaseConnection() {
   const problem = await findDatabaseProblem();
   if (!problem) {
     logger.info(`Database connected: ${target}`);
-    return true;
+    return tablesExist(target);
   }
   logger.error(
     `Cannot connect to the database ${target}\n` +
       `  Reason: ${problem}\n` +
       `  Fix: ${databaseFix(problem)}\n` +
+      `  More help: run "npm run doctor"`,
+  );
+  return false;
+}
+
+// Connected, but "npm run db:migrate" never finished (e.g. PostGIS is missing): say so instead of crashing later
+async function tablesExist(target: string) {
+  const { rows } = await pool.query("SELECT to_regclass('public.images') IS NOT NULL AS ready");
+  if (rows[0].ready) return true;
+  logger.error(
+    `The database ${target} has no tables yet.\n` +
+      `  Fix: run "npm run db:migrate" (it tells you if PostGIS is missing), then "npm run db:seed".\n` +
       `  More help: run "npm run doctor"`,
   );
   return false;

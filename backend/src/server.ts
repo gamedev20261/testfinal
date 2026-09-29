@@ -13,5 +13,5 @@ await ensureUploadFolders();
 app.listen(env.PORT, async () => {
   logger.info(`API ready on http://localhost:${env.PORT}`);
   const connected = await checkDatabaseConnection(); // logs "Database connected" or what is wrong
-  if (connected) await requeueUnfinishedImages();
+  if (connected) await requeueUnfinishedImages().catch((error) => logger.error(error, 'Could not re-queue unfinished images'));
 });

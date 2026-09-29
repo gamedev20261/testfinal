@@ -6,6 +6,7 @@ import { db, pool } from './client';
 import { users, labelGroups, labelClasses } from './schema';
 import { hashPassword } from '../lib/password';
 import { isProduction } from '../config/env';
+import { errorMessage } from '../lib/error-message';
 
 const settingsSchema = z.object({
   ADMIN_NAME: z.string().min(1).default('Administrator'),
@@ -76,7 +77,8 @@ async function main() {
 
 main()
   .catch((error) => {
-    console.error(error instanceof Error ? error.message : error);
+    const message = errorMessage(error);
+    console.error(message.includes('does not exist') ? `${message}\n\nThe tables are missing: run "npm run db:migrate" first.` : message);
     process.exitCode = 1;
   })
   .finally(() => pool.end());

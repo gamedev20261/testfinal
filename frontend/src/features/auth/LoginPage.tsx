@@ -1,23 +1,45 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { Navigate, useLocation, useNavigate } from 'react-router';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { FormField } from '../../components/ui/FormField';
+import { apiErrorMessage } from '../../api/client';
 import { loginSchema, type LoginValues } from './login-schema';
+import { useCurrentUser, useLogin } from './use-auth';
 
 export function LoginPage() {
   const {
     register,
     handleSubmit,
+    setError,
     formState: { errors, isSubmitting },
   } = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: '', password: '' },
   });
+  const { data: user } = useCurrentUser();
+  const login = useLogin();
+  const navigate = useNavigate();
+  const location = useLocation();
 
-  // Runs only when every field is valid. Patch 06 sends the values to the API here.
-  function onSubmit(values: LoginValues) {
-    console.log('Form is valid. Patch 06 will send it to POST /api/auth/login for', values.email);
+  // The page the user wanted before being sent here (set by RequireAuth), or the start page
+  const from: string = location.state?.from ?? '/';
+
+  // Runs only when every field is valid
+  async function onSubmit(values: LoginValues) {
+    try {
+      await login.mutateAsync(values);
+      navigate(from, { replace: true });
+    } catch (error) {
+      // e.g. 401 "Invalid email or password" or 429 "Too many failed logins…"
+      setError('root', { message: apiErrorMessage(error, 'Could not sign in') });
+    }
+  }
+
+  // Already logged in: nothing to do here
+  if (user) {
+    return <Navigate to={from} replace />;
   }
 
   return (
@@ -55,6 +77,12 @@ export function LoginPage() {
               {...register('password')}
             />
           </FormField>
+
+          {errors.root && (
+            <p role="alert" className="rounded border border-danger/30 bg-danger/5 px-3 py-2 text-xs text-danger">
+              {errors.root.message}
+            </p>
+          )}
 
           <Button type="submit" className="mt-2 w-full" disabled={isSubmitting}>
             {isSubmitting ? 'Signing in…' : 'Sign In'}

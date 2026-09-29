@@ -32,7 +32,7 @@ npm run dev
 
 ## Progress
 
-### Admin portal → Login screen
+### Admin portal → Login screen ✅
 
 | Patch | What it adds | Guide |
 |---|---|---|
@@ -41,4 +41,8 @@ npm run dev
 | 03 | Login API + Postman | [learn/patches/03-login-api.md](learn/patches/03-login-api.md) |
 | 04 | Frontend: first page | [learn/patches/04-frontend-first-page.md](learn/patches/04-frontend-first-page.md) |
 | 05 | Login screen design | [learn/patches/05-login-screen-design.md](learn/patches/05-login-screen-design.md) |
-| 06 | Connect the screen to the API | ⏳ |
+| 06 | Connect the screen to the API | [learn/patches/06-connect-login-to-api.md](learn/patches/06-connect-login-to-api.md) |
+
+### Admin portal → App shell (sidebar, top bar, menus)
+
+⏳ Next

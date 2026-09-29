@@ -1,6 +1,13 @@
-import { LoginPage } from './features/auth/LoginPage';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { RouterProvider } from 'react-router/dom';
+import { queryClient } from './lib/query-client';
+import { router } from './router';
 
-// The whole app. For now it is only the login screen; patch 06 adds pages and navigation.
+// The whole app: the API cache around the pages chosen by the router
 export function App() {
-  return <LoginPage />;
+  return (
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>
+  );
 }

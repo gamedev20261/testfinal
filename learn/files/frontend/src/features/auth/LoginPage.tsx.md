@@ -1,6 +1,6 @@
 # `frontend/src/features/auth/LoginPage.tsx`
 
-> Added in **patch 05** · [View the code](../../../../../../frontend/src/features/auth/LoginPage.tsx) · Background: [Forms](../../../../../concepts/forms.md), [React basics](../../../../../concepts/react-basics.md)
+> Added in **patch 05** · Changed in **patch 06** (sends the form to the API) · [View the code](../../../../../../frontend/src/features/auth/LoginPage.tsx) · Background: [Forms](../../../../../concepts/forms.md), [React basics](../../../../../concepts/react-basics.md)
 
 ## What it is for
 
@@ -8,10 +8,12 @@ The **login screen**, rebuilt to look like the original: a white card on a light
 page, the logo, the title, two fields, the Sign In button, and a note that registration
 happens in the Admin Portal.
 
-In this patch it only **checks** what you type. When the form is valid it logs a line in
-the browser console; patch 06 will send it to `POST /api/auth/login`.
+It checks what you type (patch 05), then sends it to `POST /api/auth/login` (patch 06).
+A wrong login shows the server's message in a red box; a correct one opens the start page.
 
-![The login screen](../../../../../patches/images/05-login.png)
+| Empty | Wrong password (patch 06) |
+|---|---|
+| ![The login screen](../../../../../patches/images/05-login.png) | ![Wrong password](../../../../../patches/images/06-wrong-password.png) |
 
 ## Where it lives
 
@@ -21,39 +23,86 @@ thing are together.
 
 ## The code, piece by piece
 
-### 1. Set up the form
+### 1. Set up the form and the hooks
 
 ```tsx
   const {
     register,
     handleSubmit,
+    setError,
     formState: { errors, isSubmitting },
   } = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: '', password: '' },
   });
+  const { data: user } = useCurrentUser();
+  const login = useLogin();
+  const navigate = useNavigate();
+  const location = useLocation();
 ```
 `useForm` (from React Hook Form) creates the form's state and gives back the tools we need
 ([explained here](../../../../../concepts/forms.md#3-react-hook-form)):
 - `register`: connects an input to a field.
 - `handleSubmit`: wraps our submit function with validation.
+- `setError` *(patch 06)*: lets us add an error ourselves (the server's answer).
 - `errors`: the current message for each field.
-- `isSubmitting`: `true` while submitting.
+- `isSubmitting`: `true` while `onSubmit` runs, including while we wait for the server.
 
 `resolver: zodResolver(loginSchema)` means "validate with [our Zod schema](login-schema.ts.md)".
-`<LoginValues>` tells TypeScript the shape of the values.
 
-### 2. What happens on a valid submit
+The four hooks added in patch 06:
+- `useCurrentUser()`: who is logged in (from the cache, [use-auth.ts](use-auth.ts.md)).
+- `useLogin()`: the login mutation.
+- `useNavigate()`: a function to change page from code.
+- `useLocation()`: the current URL, and the `state` that [`RequireAuth`](RequireAuth.tsx.md)
+  may have attached.
+
+### 2. Where to go after logging in
 
 ```tsx
-  function onSubmit(values: LoginValues) {
-    console.log('Form is valid. Patch 06 will send it to POST /api/auth/login for', values.email);
+  const from: string = location.state?.from ?? '/';
+```
+If `RequireAuth` sent us here from a protected page, it left `{ from: '/that/page' }` in the
+location state; go back there. Otherwise (you opened `/login` directly) go to `/`.
+
+### 3. What happens on a valid submit
+
+```tsx
+  async function onSubmit(values: LoginValues) {
+    try {
+      await login.mutateAsync(values);
+      navigate(from, { replace: true });
+    } catch (error) {
+      setError('root', { message: apiErrorMessage(error, 'Could not sign in') });
+    }
   }
 ```
-`handleSubmit(onSubmit)` only calls this when every field passed. For now it just logs.
-We log the email, never the password.
+`handleSubmit(onSubmit)` only calls this when every field passed. Then:
+1. `await login.mutateAsync(values)` sends `POST /api/auth/login` and **waits**. While it
+   waits, `isSubmitting` is `true`, so the button shows *Signing in…* and is disabled
+   (no double submit). On success, `useLogin` stores the user in the cache.
+2. `navigate(from, { replace: true })` opens the start page. `replace` means the Back button
+   won't return to the login page.
+3. If the server refused (401, 429) or couldn't be reached, `mutateAsync` **throws**, and
+   `catch` stores the message as a *root* error: an error about the whole form rather than
+   one field. [`apiErrorMessage`](../../api/client.ts.md) picks the server's sentence,
+   e.g. *Invalid email or password*.
 
-### 3. The card and the header
+React Hook Form clears root errors on the next submit, so the red box disappears as soon as
+you try again.
+
+### 4. Already logged in?
+
+```tsx
+  if (user) {
+    return <Navigate to={from} replace />;
+  }
+```
+Opening `/login` while logged in makes no sense, so redirect. This `if` comes **after all
+the hooks**: hooks must run in the same order on every render, so none may sit below an
+early `return`.
+
+### 5. The card and the header
 
 ```tsx
     <main className="flex min-h-screen items-center justify-center bg-primary-light p-4">
@@ -70,7 +119,7 @@ The same classes as the original login page: a page-filling light-blue backgroun
 card centred, a 48×48 px blue square with a white "G" (`h-12 w-12`, `mx-auto` centres it),
 then the title and subtitle.
 
-### 4. The form
+### 6. The form
 
 ```tsx
         <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
@@ -102,7 +151,7 @@ then the title and subtitle.
 The password field is the same, with `type="password"` (dots instead of letters) and
 `autoComplete="current-password"`.
 
-### 5. The button
+### 7. The server's error, and the button
 
 ```tsx
           <Button type="submit" className="mt-2 w-full" disabled={isSubmitting}>
@@ -110,9 +159,21 @@ The password field is the same, with `type="password"` (dots instead of letters)
           </Button>
 ```
 `type="submit"` makes the click submit the form. While submitting, the button is disabled
-and says *Signing in…*. You'll really see that in patch 06, when there's a server to wait for.
+and says *Signing in…*.
 
-### 6. The footer note
+Just above the button, the server's message (patch 06):
+
+```tsx
+          {errors.root && (
+            <p role="alert" className="rounded border border-danger/30 bg-danger/5 px-3 py-2 text-xs text-danger">
+              {errors.root.message}
+            </p>
+          )}
+```
+A light-red box, drawn only when there is a root error. `bg-danger/5` = our red at 5%
+opacity. `role="alert"` makes screen readers announce it.
+
+### 8. The footer note
 
 ```tsx
           User registration is restricted to the{' '}
@@ -127,4 +188,5 @@ text would read "to theAdmin Portal".
 |---|---|---|
 | Label "Username or Email" | "Email" | Only email login exists (in both versions) |
 | `useState` for the fields, manual `onChange` | React Hook Form + Zod | Validation with clear per-field messages; less code |
-| Errors only from the server, in a toast | Per-field messages before sending | Faster feedback, no pointless requests |
+| Errors only from the server, in a toast | Per-field messages before sending, server errors in a box above the button | Faster feedback, no pointless requests; the message stays visible next to the form |
+| After login: annotators → task list, others → home | Everyone → `/` (or the page they came from) | The portals don't exist yet; each role gets its landing page when its portal is built |

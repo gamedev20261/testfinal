@@ -1,6 +1,6 @@
 # `frontend/package.json`
 
-> Added in **patch 04** · Changed in **patch 05** · [View the file](../../../frontend/package.json) · Background: [Node, npm and TypeScript](../../concepts/node-npm-typescript.md)
+> Added in **patch 04** · Changed in **patches 05, 06** · [View the file](../../../frontend/package.json) · Background: [Node, npm and TypeScript](../../concepts/node-npm-typescript.md)
 
 ## What it is for
 
@@ -28,6 +28,10 @@ Run its commands from inside the `frontend/` folder.
 | `zod` | *(patch 05)* Validation rules, the same library as the backend |
 | `@hookform/resolvers` | *(patch 05)* Lets React Hook Form validate with a Zod schema |
 | `clsx`, `tailwind-merge` | *(patch 05)* Build `className` strings cleanly ([`cn`](src/lib/cn.ts.md)) |
+| `axios` | *(patch 06)* Sends requests to the API ([client](src/api/client.ts.md)) |
+| `@tanstack/react-query` | *(patch 06)* Loads, caches and updates server data ([data flow](../../concepts/frontend-data-flow.md)) |
+| `react-router` | *(patch 06)* Pages and URLs ([router](src/router.tsx.md)) |
+| `lucide-react` | *(patch 06)* Icons, the same set as the original app |
 
 ## Dev dependencies (tools, not shipped to the browser)
 
@@ -38,5 +42,3 @@ Run its commands from inside the `frontend/` folder.
 | `tailwindcss`, `@tailwindcss/vite` | Tailwind CSS and its Vite plugin |
 | `typescript` | The type checker |
 | `@types/react`, `@types/react-dom` | Type descriptions for React |
-
-More packages are added in patch 06 (routing, API calls).

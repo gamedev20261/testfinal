@@ -1,47 +1,46 @@
 # `frontend/src/App.tsx`
 
-> Added in **patch 04** · Changed in **patch 05** · [View the code](../../../../frontend/src/App.tsx) · Background: [React basics](../../../concepts/react-basics.md)
+> Added in **patch 04** · Changed in **patches 05, 06** · [View the code](../../../../frontend/src/App.tsx) · Background: [Frontend data flow](../../../concepts/frontend-data-flow.md)
 
 ## What it is for
 
-The **root component**: the top of the component tree, drawn by [`main.tsx`](main.tsx.md).
+The **root component**, drawn by [`main.tsx`](main.tsx.md). Since patch 06 it doesn't show
+anything itself: it puts the app-wide **providers** around the pages.
 
-## Now (patch 05)
-
-```tsx
-import { LoginPage } from './features/auth/LoginPage';
-
-export function App() {
-  return <LoginPage />;
-}
-```
-
-The app is only the [login screen](features/auth/LoginPage.tsx.md) for now. In patch 06,
-`App` becomes the list of **routes**: which page to show for which URL (`/login`, `/`),
-and which pages need a logged-in user.
-
-## Before (patch 04)
-
-In patch 04, `App` showed a test card with the `ApiStatus` component, to prove the
-frontend could reach the backend:
+## Now (patch 06)
 
 ```tsx
 export function App() {
   return (
-    <main className="min-h-screen flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-lg border border-border p-8 w-full max-w-sm text-center">
-        <h1 className="text-2xl font-bold text-primary">GeoAnnotator</h1>
-        <p className="text-sm text-text-secondary mt-1">The frontend is running.</p>
-        <ApiStatus />
-      </div>
-    </main>
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>
   );
 }
 ```
 
-- A component is just a **function that returns JSX**. `export` lets `main.tsx` import it.
-- `<main>` fills at least the whole screen height (`min-h-screen`) and centres its child
-  both ways (`flex items-center justify-center`).
-- `w-full max-w-sm` = full width on phones, but never wider than 24rem (384px).
+- **`QueryClientProvider`** makes the [query cache](lib/query-client.ts.md) available to
+  every component inside it. Without it, `useQuery` and `useMutation` would fail with
+  "No QueryClient set".
+- **`RouterProvider`** reads the browser's URL and draws the matching page from
+  [`router.tsx`](router.tsx.md). It comes from `react-router/dom`, the browser version of
+  React Router.
 
-That card became the login card: the same classes are in `LoginPage`.
+A **provider** is a component that shares something with all components below it, however
+deep, without passing props through every level. (React calls this mechanism *context*.)
+Order matters: the pages call `useQuery`, so the router must be *inside* the query provider.
+
+```
+App
+└── QueryClientProvider        ← the cache, for everything below
+    └── RouterProvider         ← picks the page for the URL
+        ├── /login → LoginPage
+        └── RequireAuth → HomePage
+```
+
+## History
+
+- **Patch 04:** a test card with the `ApiStatus` component, proving the frontend could
+  reach the backend. See it with `git show a06d240:frontend/src/App.tsx`.
+- **Patch 05:** `return <LoginPage />`, the app was just the login screen.
+- **Patch 06:** providers + router (above).

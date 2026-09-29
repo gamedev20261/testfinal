@@ -79,7 +79,7 @@ that make the code harder to read or that can't run (the Python scripts are miss
 | Build tool | Vite 6 | **Vite** | Same. |
 | Routing | React Router 7 | **React Router 7** | Same. |
 | Loading data | `useEffect` + `useState` in every page | **TanStack Query** | Loading/error/caching/refetch handled for you → pages shrink a lot. |
-| Global state | Zustand | **Zustand** | Same (logged-in user, editor tool state, upload queue). |
+| Global state | Zustand | **Zustand** for browser-only state (editor tool, upload queue) | The logged-in user is server data, so it lives in the TanStack Query cache instead. |
 | Forms | Manual state | **React Hook Form + Zod** | Validation rules written once, clear error messages. |
 | Styling | Tailwind 3 + custom classes | **Tailwind CSS 4 + shadcn/ui** | Ready-made accessible components (Dialog, Table, Tabs, Select…) copied into our code so you can read them. Keeps the same look. |
 | Icons / toasts | lucide-react / react-hot-toast | **lucide-react / sonner** | sonner is the shadcn default. |
@@ -268,7 +268,7 @@ migration, so you see the schema grow.
 |---|---|---|---|
 | **00** | Web fundamentals & setup | Folder skeleton, Postgres in Docker, a "hello" API and a "hello" React page talking to each other | How the web works: browser ↔ server, HTTP methods, status codes, JSON, REST, ports, `.env`. Node/npm, Git, Postman, Docker basics. HTML/CSS/JS → TypeScript → React (components, props, state), Tailwind. |
 | **01** | Database with Prisma | `schema.prisma` with all 14 tables, first migration, seed script | Tables, primary/foreign keys, relations (1-to-many, many-to-many), enums, soft delete, migrations, Prisma Studio |
-| **02** | Authentication | Seed script for the first admin, `/login`, `/logout`, `GET /auth/me`, `/change-password`; Login page | Password hashing (bcrypt), JWT, cookies vs headers, middleware, rate limiting, protected routes in React, Zustand store, axios client |
+| **02** | Authentication | Seed script for the first admin, `/login`, `/logout`, `GET /auth/me`, `/change-password`; Login page | Password hashing (bcrypt), JWT, cookies vs headers, middleware, rate limiting, protected routes in React, TanStack Query for the current user, axios client |
 | **03** | App shell & UI kit | Sidebar + top nav that change per role, route guards, error boundary, toasts, shared components | Layout components, React Router nested routes, role-based menus, shadcn/ui, accessibility basics |
 
 ### Part B — Admin portal

@@ -1,0 +1,81 @@
+import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import { tasksApi, type NewLabel } from '../../api/tasks';
+import { labelsApi } from '../../api/labels';
+import { apiErrorMessage } from '../../api/client';
+import type { Label, ShapeGeometry } from '../../types/label';
+import { useEditorStore } from './editor-store';
+import { labelsKey, taskKey } from './queries';
+
+// The annotator's changes to shapes. Each one saves on the server,
+// updates the cached list (so the map redraws) and records how to undo it.
+export function useLabelActions(taskId: string, imageId: string) {
+  const queryClient = useQueryClient();
+  const record = useEditorStore((s) => s.record);
+  const key = labelsKey(taskId, imageId);
+
+  // Adds or replaces a shape in the list, kept in drawing order (an undone delete returns to its place)
+  const put = (label: Label) =>
+    queryClient.setQueryData<Label[]>(key, (old = []) =>
+      [...old.filter((l) => l.id !== label.id), label].sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
+    );
+  const drop = (id: string) => queryClient.setQueryData<Label[]>(key, (old = []) => old.filter((l) => l.id !== id));
+  const current = (id: string) => queryClient.getQueryData<Label[]>(key)?.find((l) => l.id === id);
+  // Counts and status (e.g. "Not started" → "In progress") live in the task detail
+  const refreshTask = () => queryClient.invalidateQueries({ queryKey: taskKey(taskId), exact: true });
+
+  const update = async (id: string, changes: { labelClassId?: string; geometry?: ShapeGeometry }) => {
+    put(await labelsApi.update(id, changes));
+    refreshTask();
+  };
+  const remove = async (id: string) => {
+    await labelsApi.remove(id);
+    drop(id);
+    refreshTask();
+  };
+  const restore = async (id: string) => {
+    put(await labelsApi.restore(id));
+    refreshTask();
+  };
+
+  // Returns false when the server said no (the message is shown as a toast)
+  async function attempt(action: () => Promise<void>) {
+    try {
+      await action();
+      return true;
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Could not save the shape'));
+      return false;
+    }
+  }
+
+  return {
+    create: (input: NewLabel) =>
+      attempt(async () => {
+        const label = await tasksApi.createLabel(taskId, imageId, input);
+        put(label);
+        refreshTask();
+        record({ undo: () => remove(label.id), redo: () => restore(label.id) });
+      }),
+
+    changeGeometry: (id: string, geometry: ShapeGeometry) =>
+      attempt(async () => {
+        const before = current(id)!.geometry;
+        await update(id, { geometry });
+        record({ undo: () => update(id, { geometry: before }), redo: () => update(id, { geometry }) });
+      }),
+
+    changeClass: (id: string, labelClassId: string) =>
+      attempt(async () => {
+        const before = current(id)!.labelClassId;
+        await update(id, { labelClassId });
+        record({ undo: () => update(id, { labelClassId: before }), redo: () => update(id, { labelClassId }) });
+      }),
+
+    remove: (id: string) =>
+      attempt(async () => {
+        await remove(id);
+        record({ undo: () => restore(id), redo: () => remove(id) });
+      }),
+  };
+}

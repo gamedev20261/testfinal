@@ -18,6 +18,8 @@ import { getProjectStats } from './stats.service';
 import { listProjectImages, addUploadedImages } from '../images/images.service';
 import { uploadImages, uploadedFiles, removeTempFiles } from '../images/upload';
 import { HttpError } from '../../lib/http-error';
+import { listProjectTasks, createTask } from '../tasks/tasks.service';
+import { createTaskSchema } from '../tasks/tasks.schemas';
 
 export const projectsRouter = Router();
 projectsRouter.use(requireAuth);
@@ -98,6 +100,18 @@ projectsRouter.post('/:id/images', admin, uploadImages, async (req, res) => {
   } finally {
     await removeTempFiles(files); // saved files were already moved away
   }
+});
+
+// ── Tasks ──
+
+projectsRouter.get('/:id/tasks', async (req, res) => {
+  const project = await findProjectForUser(req.user!, idParam(req.params.id, 'Project'));
+  res.json({ tasks: await listProjectTasks(req.user!, project.id) });
+});
+
+projectsRouter.post('/:id/tasks', admin, async (req, res) => {
+  const project = await findProjectForUser(req.user!, idParam(req.params.id, 'Project'));
+  res.status(201).json({ task: await createTask(project.id, createTaskSchema.parse(req.body)) });
 });
 
 // ── Stats ──

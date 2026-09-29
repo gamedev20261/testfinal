@@ -9,6 +9,9 @@ import { usersRouter, userGroupsRouter } from './modules/users/users.routes';
 import { labelClassesRouter, labelGroupsRouter } from './modules/label-classes/label-classes.routes';
 import { projectsRouter } from './modules/projects/projects.routes';
 import { imagesRouter } from './modules/images/images.routes';
+import { tasksRouter } from './modules/tasks/tasks.routes';
+import { labelsRouter } from './modules/labels/labels.routes';
+import { notificationsRouter } from './modules/notifications/notifications.routes';
 
 // Builds the Express app. It does not start listening: server.ts does that.
 export function createApp() {
@@ -29,6 +32,9 @@ export function createApp() {
   app.use('/api/label-groups', labelGroupsRouter);
   app.use('/api/projects', projectsRouter);
   app.use('/api/images', imagesRouter);
+  app.use('/api/tasks', tasksRouter);
+  app.use('/api/labels', labelsRouter);
+  app.use('/api/notifications', notificationsRouter);
 
   // 3. No route matched: answer with JSON instead of Express's HTML page
   app.use((req, res) => {

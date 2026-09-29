@@ -4,8 +4,8 @@ import sharp from 'sharp';
 import { ZipArchive } from 'archiver';
 import type { Project } from '../../db/schema';
 import { HttpError } from '../../lib/http-error';
-import { imageFile, DISPLAY_FILE } from '../../lib/storage';
 import { SHARP_OPTIONS } from '../images/processing/read-raster';
+import { displayFile } from '../images/processing/pyramid';
 import { listProjectLabelClasses } from '../projects/projects.service';
 import { EXPORT_FORMATS, type ExportFormat, type ExportOptions } from './export.schemas';
 import { countPassedTasks, findExportImages, findChipShapes, type ExportImage } from './export.queries';
@@ -123,7 +123,7 @@ async function cutIntoChips(projectId: string, image: ExportImage, baseName: str
 
 // The chip's pixels (8-bit RGB), read once and reused by its augmented copies
 async function chipPixels(image: ExportImage, chip: Chip): Promise<RawImage> {
-  const { data, info } = await sharp(imageFile(image.id, DISPLAY_FILE), SHARP_OPTIONS)
+  const { data, info } = await sharp(await displayFile(image.id), SHARP_OPTIONS)
     .extract({ left: chip.x0, top: chip.y0, width: chip.width, height: chip.height })
     .removeAlpha()
     .raw()

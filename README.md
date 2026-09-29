@@ -110,9 +110,15 @@ Segmentation projects show each shape's class name on it (`L` hides them).
 
 - Login: bcrypt password check → signed JWT in an httpOnly cookie. Changing a password or role ends other logins.
 - Rules for who may do what: [`backend/src/permissions/access.ts`](backend/src/permissions/access.ts).
-- **Images**: saved to `uploads/images/<id>/`, then a background queue makes an 8-bit copy (16-bit and
-  multi-band GeoTIFFs get a 2–98 % contrast stretch), a thumbnail, a preview and **Zoomify map tiles** (sharp).
+- **Images** (TIFF/GeoTIFF of any size, e.g. 100 GB): saved to `uploads/images/<id>/`, then a background queue makes
+  one **COG-style** file the app reads: tiled (512 px), JPEG-compressed, with internal overviews, written by libvips
+  in a single streaming pass (the image is never loaded whole). An upload that already is an 8-bit COG (tiled, with
+  overviews) is used as it is, with no copy. 16-bit and multi-band images get a 2–98 % contrast stretch (measured on
+  64 windows spread over the image). `pyramid.json` records the file and its levels.
+  The editor's **Zoomify map tiles are cut on first view** from the smallest overview that is sharp enough, then kept
+  on disk; the magic pen and exports read through the same overviews.
   GeoTIFFs keep their geotransform and EPSG code; PostGIS stores their footprint in longitude/latitude.
+  For very large uploads raise `MAX_UPLOAD_MB` in `backend/.env`.
 - **Shapes** are PostGIS geometries in image pixels. PostGIS rejects self-crossing polygons,
   cuts shapes to the image edge (`ST_Intersection`) and refuses shapes inside other shapes (`ST_Covers`).
   A rotated box is a 4-corner polygon (checked against `ST_OrientedEnvelope`) whose first side gives its angle.

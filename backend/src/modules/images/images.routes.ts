@@ -1,3 +1,4 @@
+import { access } from 'node:fs/promises';
 import { Router, type Response } from 'express';
 import { requireAuth } from '../../middleware/require-auth';
 import { requireRole } from '../../middleware/require-role';
@@ -5,6 +6,9 @@ import { idParam } from '../../lib/params';
 import { HttpError } from '../../lib/http-error';
 import { imageFile, THUMB_FILE, PREVIEW_FILE, TILES_DIR } from '../../lib/storage';
 import { assertCanViewImage, getImage, deleteImage, retryImage } from './images.service';
+import { zoomifyTile } from './processing/pyramid';
+
+const exists = (file: string) => access(file).then(() => true, () => false);
 
 // Project image lists and uploads are in projects.routes.ts (/api/projects/:id/images)
 export const imagesRouter = Router();
@@ -37,13 +41,20 @@ imagesRouter.get('/:id/tiles/ImageProperties.xml', async (req, res) => {
   await sendImageFile(res, imageFile(imageId, `${TILES_DIR}/ImageProperties.xml`));
 });
 
+// Tiles are cut from the image's overviews on first use and kept (older images have them all ready)
 imagesRouter.get('/:id/tiles/:group/:tile', async (req, res) => {
   const imageId = idParam(req.params.id, 'Image');
   const { group, tile } = req.params;
   // Strict names, so nobody can ask for ../../something
-  if (!/^TileGroup\d+$/.test(group) || !/^\d+-\d+-\d+\.jpg$/.test(tile)) throw new HttpError(404, 'Tile not found');
+  const match = /^(\d+)-(\d+)-(\d+)\.jpg$/.exec(tile);
+  if (!/^TileGroup\d+$/.test(group) || !match) throw new HttpError(404, 'Tile not found');
   await assertCanViewImage(req.user!, imageId);
-  await sendImageFile(res, imageFile(imageId, `${TILES_DIR}/${group}/${tile}`));
+  const premade = imageFile(imageId, `${TILES_DIR}/${group}/${tile}`);
+  if (await exists(premade)) return sendImageFile(res, premade);
+  const [z, x, y] = match.slice(1).map(Number);
+  const file = await zoomifyTile(imageId, z, x, y).catch(() => null);
+  if (!file) throw new HttpError(404, 'Tile not found (the image may still be processing)');
+  await sendImageFile(res, file);
 });
 
 imagesRouter.delete('/:id', admin, async (req, res) => {

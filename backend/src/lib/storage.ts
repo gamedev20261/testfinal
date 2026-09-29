@@ -6,9 +6,11 @@ import { env } from '../config/env';
 //   uploads/tmp/                 files being uploaded
 //   uploads/images/<id>/         one folder per image:
 //     original.tif               the file as uploaded
-//     display.tif                8-bit RGB copy used for tiles and exports
+//     display.tif                8-bit RGB COG-style copy (tiled, with overviews); not made when the
+//                                upload already is such a COG
+//     pyramid.json               which file the app reads (display.tif or the original) and its levels
 //     thumb.jpg, preview.jpg     small pictures for lists and cards
-//     tiles/                     Zoomify map tiles for the editor
+//     tiles/                     Zoomify map tiles, cut on first use and kept
 
 export const uploadRoot = path.resolve(env.UPLOAD_DIR);
 export const tmpDir = path.join(uploadRoot, 'tmp');
@@ -18,6 +20,8 @@ export const imageFile = (imageId: string, name: string) => path.join(imageDir(i
 
 export const originalName = (imageId: string, ext: string) => imageFile(imageId, `original${ext}`);
 export const DISPLAY_FILE = 'display.tif';
+export const PYRAMID_FILE = 'pyramid.json';
+export const STRETCHED_FILE = 'stretched.tmp.tif'; // temporary 8-bit copy of a 16-bit image
 export const THUMB_FILE = 'thumb.jpg';
 export const PREVIEW_FILE = 'preview.jpg';
 export const TILES_DIR = 'tiles';

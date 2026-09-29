@@ -1,11 +1,9 @@
-import sharp from 'sharp';
 import { sql, type SQL } from 'drizzle-orm';
 import { db } from '../../db/client';
 import type { PolygonGeometry } from '../../db/schema';
 import { HttpError } from '../../lib/http-error';
-import { imageFile, DISPLAY_FILE } from '../../lib/storage';
 import { findTaskForUser, assertCanEditLabels } from '../../permissions/access';
-import { SHARP_OPTIONS } from '../images/processing/read-raster';
+import { readRegion } from '../images/processing/pyramid';
 import type { PublicUser } from '../auth/auth.service';
 import { findTaskImage } from './labels.service';
 import { growRegion, openRegion, traceOutline, countInside } from './magic-wand';
@@ -34,10 +32,11 @@ export async function magicWand(user: PublicUser, taskId: string, imageId: strin
 
   const area = searchWindow(input, size.width, size.height);
   const scale = Math.min(1, WORK_SIZE / Math.max(area.width, area.height));
-  const image = sharp(imageFile(imageId, DISPLAY_FILE), SHARP_OPTIONS).extract(area);
-  if (scale < 1) image.resize(Math.max(1, Math.round(area.width * scale)), Math.max(1, Math.round(area.height * scale)));
-  // A small median filter first, so the texture of roofs or trees doesn't break the object up
-  const { data, info } = await image.median(3).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  // Read from the smallest overview that is sharp enough, then a small median filter,
+  // so the texture of roofs or trees doesn't break the object up
+  const [w, h] = [Math.max(1, Math.round(area.width * scale)), Math.max(1, Math.round(area.height * scale))];
+  const image = await readRegion(imageId, area, w, h);
+  const { data, info } = await image.median(3).raw().toBuffer({ resolveWithObject: true });
 
   const seedX = Math.min(info.width - 1, Math.floor((input.x - area.left) * (info.width / area.width)));
   const seedY = Math.min(info.height - 1, Math.floor((input.y - area.top) * (info.height / area.height)));

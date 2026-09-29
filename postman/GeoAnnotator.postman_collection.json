@@ -1186,7 +1186,7 @@
     },
     {
       "name": "Admin · Imagery",
-      "description": "In \"Upload images\", click the files row in the Body tab and choose a .tif/.jpg/.png from your computer.",
+      "description": "In \"Upload images\", click the files row in the Body tab and choose a .tif or .tiff image from your computer.",
       "item": [
         {
           "name": "Upload images",
@@ -1203,7 +1203,7 @@
                 "images"
               ]
             },
-            "description": "",
+            "description": "Only TIFF / GeoTIFF files (.tif, .tiff) are accepted; anything else (or a renamed JPEG) → 400.",
             "body": {
               "mode": "formdata",
               "formdata": [
@@ -1617,7 +1617,7 @@
           ]
         },
         {
-          "name": "Draw a box",
+          "name": "Draw a polygon",
           "request": {
             "method": "POST",
             "url": {
@@ -1633,7 +1633,7 @@
                 "labels"
               ]
             },
-            "description": "Pixel coordinates: x to the right, y down. PostGIS cuts the shape to the image and checks it.",
+            "description": "Pixel coordinates: x to the right, y down. PostGIS cuts the shape to the image and checks it. A segmentation project only takes polygons (drawn, from the magic pen or the brush).",
             "header": [
               {
                 "key": "Content-Type",
@@ -1642,7 +1642,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"labelClassId\": \"{{labelClassId}}\",\n  \"shapeType\": \"BBOX\",\n  \"geometry\": {\n    \"type\": \"Polygon\",\n    \"coordinates\": [\n      [\n        [\n          100,\n          100\n        ],\n        [\n          220,\n          100\n        ],\n        [\n          220,\n          180\n        ],\n        [\n          100,\n          180\n        ],\n        [\n          100,\n          100\n        ]\n      ]\n    ]\n  }\n}"
+              "raw": "{\n  \"labelClassId\": \"{{labelClassId}}\",\n  \"shapeType\": \"POLYGON\",\n  \"geometry\": {\n    \"type\": \"Polygon\",\n    \"coordinates\": [\n      [\n        [\n          100,\n          100\n        ],\n        [\n          220,\n          100\n        ],\n        [\n          220,\n          180\n        ],\n        [\n          100,\n          180\n        ],\n        [\n          100,\n          100\n        ]\n      ]\n    ]\n  }\n}"
             }
           },
           "event": [
@@ -1659,7 +1659,7 @@
           ]
         },
         {
-          "name": "A box inside the first one → 400",
+          "name": "A polygon inside the first one → 400",
           "request": {
             "method": "POST",
             "url": {
@@ -1684,7 +1684,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"labelClassId\": \"{{labelClassId}}\",\n  \"shapeType\": \"BBOX\",\n  \"geometry\": {\n    \"type\": \"Polygon\",\n    \"coordinates\": [\n      [\n        [\n          120,\n          120\n        ],\n        [\n          150,\n          120\n        ],\n        [\n          150,\n          150\n        ],\n        [\n          120,\n          150\n        ],\n        [\n          120,\n          120\n        ]\n      ]\n    ]\n  }\n}"
+              "raw": "{\n  \"labelClassId\": \"{{labelClassId}}\",\n  \"shapeType\": \"POLYGON\",\n  \"geometry\": {\n    \"type\": \"Polygon\",\n    \"coordinates\": [\n      [\n        [\n          120,\n          120\n        ],\n        [\n          150,\n          120\n        ],\n        [\n          150,\n          150\n        ],\n        [\n          120,\n          150\n        ],\n        [\n          120,\n          120\n        ]\n      ]\n    ]\n  }\n}"
             }
           },
           "event": [
@@ -1694,6 +1694,131 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "A rotated box in a segmentation project → 400",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/tasks/{{taskId}}/images/{{imageId}}/labels",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "tasks",
+                "{{taskId}}",
+                "images",
+                "{{imageId}}",
+                "labels"
+              ]
+            },
+            "description": "Rotated boxes (OBB: 4 corners, first side = angle) belong to object detection projects. Segmentation only uses polygons.",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"labelClassId\": \"{{labelClassId}}\",\n  \"shapeType\": \"OBB\",\n  \"geometry\": {\n    \"type\": \"Polygon\",\n    \"coordinates\": [\n      [\n        [\n          300,\n          200\n        ],\n        [\n          400,\n          250\n        ],\n        [\n          375,\n          300\n        ],\n        [\n          275,\n          250\n        ],\n        [\n          300,\n          200\n        ]\n      ]\n    ]\n  }\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Magic pen: the object under a pixel",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/tasks/{{taskId}}/images/{{imageId}}/magic-wand",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "tasks",
+                "{{taskId}}",
+                "images",
+                "{{imageId}}",
+                "magic-wand"
+              ]
+            },
+            "description": "Grows a region of similar colour from (x, y) inside `view` (the part of the image on screen) and returns its outline as a polygon. tolerance: 1-128 per colour channel. Nothing is saved: the editor then saves the polygon with \"Draw a polygon\". 400 when nothing stands out at that pixel (or everything does).",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"x\": 160,\n  \"y\": 140,\n  \"tolerance\": 32,\n  \"view\": [\n    0,\n    0,\n    1024,\n    1024\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200, or 400 when nothing stands out at this pixel', () => pm.expect([200, 400]).to.include(pm.response.code));",
+                  "if (pm.response.code === 200) pm.test('A polygon', () => pm.expect(pm.response.json().geometry.type).to.eql('Polygon'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Brush: a stroke becomes a polygon",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/tasks/{{taskId}}/images/{{imageId}}/brush",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "tasks",
+                "{{taskId}}",
+                "images",
+                "{{imageId}}",
+                "brush"
+              ]
+            },
+            "description": "The stroke (the path of the brush centre) is widened by `radius` pixels. With `base` (the selected polygon) it is added to it, or erased from it with \"erase\": true. Answers { action: create | update | delete | none, geometry }. Nothing is saved.",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"stroke\": [\n    [\n      300,\n      300\n    ],\n    [\n      380,\n      320\n    ],\n    [\n      420,\n      380\n    ]\n  ],\n  \"radius\": 15\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('A new polygon', () => pm.expect(pm.response.json().action).to.eql('create'));"
                 ]
               }
             }
@@ -2191,7 +2316,7 @@
     },
     {
       "name": "Admin · Export",
-      "description": "Log in as admin again first. In Postman use \"Send and Download\" to save the zip.",
+      "description": "Log in as admin again first. Only tasks that passed review are exported (the auditor folder passes the task). In Postman use \"Send and Download\" to save the zip.",
       "item": [
         {
           "name": "Login as admin",
@@ -2236,7 +2361,7 @@
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{baseUrl}}/projects/{{projectId}}/export/summary?tasks=ALL",
+              "raw": "{{baseUrl}}/projects/{{projectId}}/export/summary",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -2245,15 +2370,9 @@
                 "{{projectId}}",
                 "export",
                 "summary"
-              ],
-              "query": [
-                {
-                  "key": "tasks",
-                  "value": "ALL"
-                }
               ]
             },
-            "description": ""
+            "description": "passedTaskCount, imageCount and labelCount of the tasks that passed review."
           },
           "event": [
             {
@@ -2268,11 +2387,105 @@
           ]
         },
         {
-          "name": "Download YOLO (640 px chips)",
+          "name": "Download masks, a folder per class (512 px chips)",
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{baseUrl}}/projects/{{projectId}}/export?format=YOLO&tasks=ALL&chipSize=640&includeImages=true",
+              "raw": "{{baseUrl}}/projects/{{projectId}}/export?format=MASKS&chipSize=512&mergeClasses=false&includeImages=true",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{projectId}}",
+                "export"
+              ],
+              "query": [
+                {
+                  "key": "format",
+                  "value": "MASKS"
+                },
+                {
+                  "key": "chipSize",
+                  "value": "512"
+                },
+                {
+                  "key": "mergeClasses",
+                  "value": "false"
+                },
+                {
+                  "key": "includeImages",
+                  "value": "true"
+                }
+              ]
+            },
+            "description": "masks/<class>/<chip>.png: the class white, everything else black. images/ has the JPEG chips, classes.json the folders."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Download masks, all classes merged (custom 800 px chips)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{projectId}}/export?format=MASKS&chipSize=800&mergeClasses=true&includeImages=true",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{projectId}}",
+                "export"
+              ],
+              "query": [
+                {
+                  "key": "format",
+                  "value": "MASKS"
+                },
+                {
+                  "key": "chipSize",
+                  "value": "800"
+                },
+                {
+                  "key": "mergeClasses",
+                  "value": "true"
+                },
+                {
+                  "key": "includeImages",
+                  "value": "true"
+                }
+              ]
+            },
+            "description": "masks/<chip>.png: black background, each class in its own colour (see classes.json). Any chip size from 64 to 10000 px works; 0 = whole images."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Download YOLO-seg (640 px chips)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{projectId}}/export?format=YOLO&chipSize=640&includeImages=true",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -2287,10 +2500,6 @@
                   "value": "YOLO"
                 },
                 {
-                  "key": "tasks",
-                  "value": "ALL"
-                },
-                {
                   "key": "chipSize",
                   "value": "640"
                 },
@@ -2300,7 +2509,7 @@
                 }
               ]
             },
-            "description": ""
+            "description": "Segmentation: one polygon per line. (Detection projects also offer format=YOLO_OBB for rotated boxes.)"
           },
           "event": [
             {
@@ -2319,7 +2528,7 @@
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{baseUrl}}/projects/{{projectId}}/export?format=COCO&tasks=ALL&chipSize=0&includeImages=false",
+              "raw": "{{baseUrl}}/projects/{{projectId}}/export?format=COCO&chipSize=0&includeImages=false",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -2332,10 +2541,6 @@
                 {
                   "key": "format",
                   "value": "COCO"
-                },
-                {
-                  "key": "tasks",
-                  "value": "ALL"
                 },
                 {
                   "key": "chipSize",
@@ -2366,7 +2571,7 @@
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{baseUrl}}/projects/{{projectId}}/export?format=GEOJSON&tasks=ALL&includeImages=false",
+              "raw": "{{baseUrl}}/projects/{{projectId}}/export?format=GEOJSON&includeImages=false",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -2379,10 +2584,6 @@
                 {
                   "key": "format",
                   "value": "GEOJSON"
-                },
-                {
-                  "key": "tasks",
-                  "value": "ALL"
                 },
                 {
                   "key": "includeImages",
@@ -2399,6 +2600,45 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Chip size 50 → 400",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{projectId}}/export?format=MASKS&chipSize=50",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{projectId}}",
+                "export"
+              ],
+              "query": [
+                {
+                  "key": "format",
+                  "value": "MASKS"
+                },
+                {
+                  "key": "chipSize",
+                  "value": "50"
+                }
+              ]
+            },
+            "description": "Chips are 64 to 10000 px (or 0 for whole images)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));"
                 ]
               }
             }

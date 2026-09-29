@@ -5,7 +5,7 @@ A web app for labelling satellite and aerial images, with three portals:
 | Portal | Who | What they do |
 |---|---|---|
 | **Admin** | `ADMIN` | Users and groups, label classes, projects, image upload, tasks, team, statistics, dataset export |
-| **Annotator** | `ANNOTATOR` | Draws boxes, polygons and points on the images of their tasks, then submits them |
+| **Annotator** | `ANNOTATOR` | Draws boxes and rotated boxes (detection) or polygons (segmentation) on the images of their tasks, then submits them |
 | **Auditor** | `AUDITOR` | Approves or rejects each shape and image, then passes or fails the task |
 
 The original app (`gamedev20261/test2`) was only a reference and is never modified.
@@ -49,30 +49,49 @@ Set `SEED_DEMO_USERS=false` in `.env` to skip the demo accounts and classes.
 ## A full round, step by step
 
 1. **Admin** → *New Project* (type *Object Detection* or *Segmentation*, pick label classes).
-2. **Admin** → project page → *Upload images* (GeoTIFF, TIFF, JPEG, PNG). They are processed in the background.
+2. **Admin** → project page → *Upload images* (TIFF / GeoTIFF only). They are processed in the background.
 3. **Admin** → *New Task*: a name, 1 annotator, 1 auditor, some images. Both people get a notification.
 4. **Annotator** → *Labeling tasks* → *Start*. Draw shapes, then *Submit for review*.
 5. **Auditor** → *Labeling tasks* → *Review*. Approve (A) or reject (R) shapes, approve/reject each image,
    or *Pass* / *Fail* the whole task. A failed task goes back to the annotator with the reasons.
 6. **Annotator** fixes the rejected shapes (moving or reshaping one sends it back to review) and submits again.
-7. **Admin** → *Export*: YOLO, COCO or GeoJSON, whole images or chips of 256–1024 px.
+7. **Admin** → *Export* (only tasks that **passed** review), cut into chips of a size the admin chooses
+   (whole images, 256–1024 px, or any custom size from 64 to 10 000 px):
+   - *Object detection*: YOLO (boxes), YOLO OBB (rotated boxes, 4 corners), COCO, GeoJSON
+   - *Segmentation*: **Masks** (PNG, black background), YOLO-seg, COCO, GeoJSON.
+     With *Merge all classes* one mask per chip paints each class in its own colour (`masks/`, `classes.json`);
+     without it every class gets its own folder of black-and-white masks (`masks/<class>/`, the class white).
 
 ## Editor keyboard shortcuts
 
 | Key | Action |
 |---|---|
-| `V` / `B` / `P` / `O` | Select, Box, Polygon, Point tool |
+| `V` | Select / edit tool |
+| `B` / `O` | Detection: Box, Rotated box tool |
+| `P` / `M` / `B` | Segmentation: Polygon, Magic pen, Brush tool |
+| Middle mouse button (drag) | Move the image, with any tool |
 | `1`–`9` | Class for new shapes (or change the selected shape's class) |
 | `Delete` | Delete the selected shape |
 | `Esc` | Cancel drawing / deselect |
-| `Backspace` | Remove the last polygon point while drawing |
+| `Backspace` | Remove the last polygon (or rotated box) corner while drawing |
+| `Shift` + brush stroke | Erase from the selected shape |
 | `Ctrl+Z` / `Ctrl+Y` (`Ctrl+Shift+Z`) | Undo / redo |
 | `[` / `]` | Previous / next image |
 | `L` | Show class names on the map |
 | `A` / `R` | Auditor: approve / reject the selected shape |
 
-Boxes: press, drag, release. Polygons: click the points, double-click to finish.
+Tools per project type: *object detection* draws **boxes** and **rotated boxes**; *segmentation* only makes
+**polygons** (points can no longer be drawn; old ones are still shown).
+
+- Box: press, drag, release.
+- Rotated box: click two corners along one side, then click to set the width. Select it and drag its round knob to turn it.
+- Polygon: click the corners, double-click to finish.
+- Magic pen: click an object; its outline is found by colour (*Tolerance* in the toolbar) and saved as a polygon.
+- Brush: paint an object (*Size* in the toolbar). The new shape stays selected, so the next strokes join it;
+  `Shift` (or the eraser button) erases from it; `Esc` starts a new shape.
+
 With the select tool: drag a corner to reshape, drag inside a shape to move it.
+Segmentation projects show each shape's class name on it (`L` hides them).
 
 ## How it works
 
@@ -85,7 +104,13 @@ With the select tool: drag a corner to reshape, drag inside a shape to move it.
   GeoTIFFs keep their geotransform and EPSG code; PostGIS stores their footprint in longitude/latitude.
 - **Shapes** are PostGIS geometries in image pixels. PostGIS rejects self-crossing polygons,
   cuts shapes to the image edge (`ST_Intersection`) and refuses shapes inside other shapes (`ST_Covers`).
-- **Export** cuts chips with `ST_Intersection` + `ST_Translate`; GeoJSON puts shapes on the map with
+  A rotated box is a 4-corner polygon (checked against `ST_OrientedEnvelope`) whose first side gives its angle.
+- **Magic pen** (`labels/magic-wand.ts`): sharp reads the pixels around the click, a flood fill collects similar
+  colours, the outline is traced along pixel edges and PostGIS makes it a valid, simplified polygon.
+  **Brush**: the stroke is widened with `ST_Buffer`, then joined to (`ST_Union`) or cut from (`ST_Difference`) the selected shape.
+- **Uploads** must be TIFF files (extension and file header are checked).
+- **Export** uses passed tasks only and cuts chips with `ST_Intersection` + `ST_Translate`; segmentation masks are
+  drawn pixel by pixel (a pixel belongs to a shape when its centre is inside); GeoJSON puts shapes on the map with
   `ST_Affine` (geotransform) + `ST_Transform` (to EPSG:4326).
 
 **Frontend** (`frontend/`): React 19, Vite, React Router, **TanStack Query** (server data, caching, polling),

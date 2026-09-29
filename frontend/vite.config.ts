@@ -7,6 +7,8 @@ export default defineConfig({
     react(), // understands JSX and reloads components instantly when you save
     tailwindcss(), // turns the Tailwind classes we use into real CSS
   ],
+  // The main bundle is ~220 KB gzipped (React, forms, dialogs); fine for this app, so no warning below 1 MB
+  build: { chunkSizeWarningLimit: 1000 },
   server: {
     port: 5173,
     // Requests to /api go to the backend, so the browser only ever talks to one address

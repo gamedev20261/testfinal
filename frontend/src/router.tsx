@@ -5,7 +5,6 @@ import { RequireAdmin } from './features/auth/RequireAdmin';
 import { AppShell } from './components/layout/AppShell';
 import { HomePage } from './features/home/HomePage';
 import { MyTasksPage } from './features/tasks/MyTasksPage';
-import { EditorPage } from './features/editor/EditorPage';
 import { ProjectPage } from './features/projects/ProjectPage';
 import { AdminPage } from './features/admin/AdminPage';
 
@@ -21,7 +20,8 @@ export const router = createBrowserRouter([
         children: [
           { path: '/', element: <HomePage /> },
           { path: '/tasks', element: <MyTasksPage /> },
-          { path: '/tasks/:taskId', element: <EditorPage /> },
+          // The editor (with OpenLayers) is big, so it is downloaded only when opened
+          { path: '/tasks/:taskId', lazy: () => import('./features/editor/EditorPage').then((m) => ({ Component: m.EditorPage })) },
           {
             element: <RequireAdmin />,
             children: [

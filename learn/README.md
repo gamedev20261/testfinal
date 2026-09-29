@@ -1,5 +1,9 @@
 # The `learn/` folder
 
+> The lessons here cover patches 01–06 (setup, database, login). The rest of the app
+> (admin portal, imagery, tasks, editor, review, export) was built afterwards with short
+> comments in the code; the main [README](../README.md) explains how it all fits together.
+
 This folder is the **teacher**. The real app lives in `backend/` and `frontend/` and only
 has short comments. Everything that needs a longer explanation is here, so the code stays clean.
 

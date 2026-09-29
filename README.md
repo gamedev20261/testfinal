@@ -1,28 +1,29 @@
-# GeoAnnotator (learning rebuild)
+# GeoAnnotator (rebuild)
 
-A step-by-step rebuild of GeoAnnotator v2, a web app for labelling satellite and aerial
-images with three portals: **Admin**, **Annotator** and **Auditor**.
+A web app for labelling satellite and aerial images, with three portals:
 
-- **Start here:** [PLAN.md](PLAN.md) explains the modules, the technology choices and the folder structure.
-- **Learn:** [learn/README.md](learn/README.md) explains how to study each patch. Every code file has an explanation at the same path under `learn/files/`.
-- **API tests:** `postman/` (import into Postman, see [learn/postman.md](learn/postman.md))
-- **Code:** `backend/` and `frontend/`
+| Portal | Who | What they do |
+|---|---|---|
+| **Admin** | `ADMIN` | Users and groups, label classes, projects, image upload, tasks, team, statistics, dataset export |
+| **Annotator** | `ANNOTATOR` | Draws boxes, polygons and points on the images of their tasks, then submits them |
+| **Auditor** | `AUDITOR` | Approves or rejects each shape and image, then passes or fails the task |
 
-The original app (`gamedev20261/test2`) is only a reference and is never modified.
+The original app (`gamedev20261/test2`) was only a reference and is never modified.
+[PLAN.md](PLAN.md) is the original plan; this file describes what was built.
 
 ## Run it
 
 ```bash
-# 1. Database: PostgreSQL in Docker…
+# 1. Database: PostgreSQL with PostGIS, in Docker…
 docker compose up -d
-#    …or PostgreSQL installed with pgAdmin: see learn/local-postgres.md
+#    …or PostgreSQL installed with pgAdmin (+ PostGIS): see learn/local-postgres.md
 
 # 2. Backend: http://localhost:3001
 cd backend
 cp .env.example .env   # then set DATABASE_URL (and your own JWT_SECRET)
 npm install
-npm run db:migrate
-npm run db:seed        # creates the admin from ADMIN_EMAIL / ADMIN_PASSWORD in .env
+npm run db:migrate     # creates the database, PostGIS and all tables
+npm run db:seed        # admin from .env + demo annotator/auditor + demo label classes
 npm run doctor         # checks the setup; fix any [FAIL] line it shows
 npm run dev
 
@@ -32,22 +33,116 @@ npm install
 npm run dev
 ```
 
-Something not working? Run `npm run doctor` in `backend/` and see
-[learn/troubleshooting.md](learn/troubleshooting.md).
+After `git pull`, run `npm install` and `npm run db:migrate` again in `backend/` (new packages or tables).
+Something not working? Run `npm run doctor` in `backend/` and see [learn/troubleshooting.md](learn/troubleshooting.md).
 
-## Progress
+### Demo accounts (from `npm run db:seed`)
 
-### Admin portal → Login screen ✅
-
-| Patch | What it adds | Guide |
+| Email | Password | Role |
 |---|---|---|
-| 01 | Backend: first server (`/api/health`) | [learn/patches/01-backend-first-server.md](learn/patches/01-backend-first-server.md) |
-| 02 | Database and first admin user | [learn/patches/02-database-and-first-admin.md](learn/patches/02-database-and-first-admin.md) |
-| 03 | Login API + Postman | [learn/patches/03-login-api.md](learn/patches/03-login-api.md) |
-| 04 | Frontend: first page | [learn/patches/04-frontend-first-page.md](learn/patches/04-frontend-first-page.md) |
-| 05 | Login screen design | [learn/patches/05-login-screen-design.md](learn/patches/05-login-screen-design.md) |
-| 06 | Connect the screen to the API | [learn/patches/06-connect-login-to-api.md](learn/patches/06-connect-login-to-api.md) |
+| `admin@example.com` (or `ADMIN_EMAIL` in `.env`) | `ADMIN_PASSWORD` in `.env` | Admin |
+| `annotator@example.com` | `DEMO_PASSWORD` (default `ChangeMe123!`) | Annotator |
+| `auditor@example.com` | `DEMO_PASSWORD` (default `ChangeMe123!`) | Auditor |
 
-### Admin portal → App shell (sidebar, top bar, menus)
+Set `SEED_DEMO_USERS=false` in `.env` to skip the demo accounts and classes.
 
-⏳ Next
+## A full round, step by step
+
+1. **Admin** → *New Project* (type *Object Detection* or *Segmentation*, pick label classes).
+2. **Admin** → project page → *Upload images* (GeoTIFF, TIFF, JPEG, PNG). They are processed in the background.
+3. **Admin** → *New Task*: a name, 1 annotator, 1 auditor, some images. Both people get a notification.
+4. **Annotator** → *Labeling tasks* → *Start*. Draw shapes, then *Submit for review*.
+5. **Auditor** → *Labeling tasks* → *Review*. Approve (A) or reject (R) shapes, approve/reject each image,
+   or *Pass* / *Fail* the whole task. A failed task goes back to the annotator with the reasons.
+6. **Annotator** fixes the rejected shapes (moving or reshaping one sends it back to review) and submits again.
+7. **Admin** → *Export*: YOLO, COCO or GeoJSON, whole images or chips of 256–1024 px.
+
+## Editor keyboard shortcuts
+
+| Key | Action |
+|---|---|
+| `V` / `B` / `P` / `O` | Select, Box, Polygon, Point tool |
+| `1`–`9` | Class for new shapes (or change the selected shape's class) |
+| `Delete` | Delete the selected shape |
+| `Esc` | Cancel drawing / deselect |
+| `Backspace` | Remove the last polygon point while drawing |
+| `Ctrl+Z` / `Ctrl+Y` (`Ctrl+Shift+Z`) | Undo / redo |
+| `[` / `]` | Previous / next image |
+| `L` | Show class names on the map |
+| `A` / `R` | Auditor: approve / reject the selected shape |
+
+Boxes: press, drag, release. Polygons: click the points, double-click to finish.
+With the select tool: drag a corner to reshape, drag inside a shape to move it.
+
+## How it works
+
+**Backend** (`backend/`): Node 22+, TypeScript, Express 5, Zod, pino, **Drizzle ORM** on **PostgreSQL + PostGIS**.
+
+- Login: bcrypt password check → signed JWT in an httpOnly cookie. Changing a password or role ends other logins.
+- Rules for who may do what: [`backend/src/permissions/access.ts`](backend/src/permissions/access.ts).
+- **Images**: saved to `uploads/images/<id>/`, then a background queue makes an 8-bit copy (16-bit and
+  multi-band GeoTIFFs get a 2–98 % contrast stretch), a thumbnail, a preview and **Zoomify map tiles** (sharp).
+  GeoTIFFs keep their geotransform and EPSG code; PostGIS stores their footprint in longitude/latitude.
+- **Shapes** are PostGIS geometries in image pixels. PostGIS rejects self-crossing polygons,
+  cuts shapes to the image edge (`ST_Intersection`) and refuses shapes inside other shapes (`ST_Covers`).
+- **Export** cuts chips with `ST_Intersection` + `ST_Translate`; GeoJSON puts shapes on the map with
+  `ST_Affine` (geotransform) + `ST_Transform` (to EPSG:4326).
+
+**Frontend** (`frontend/`): React 19, Vite, React Router, **TanStack Query** (server data, caching, polling),
+React Hook Form + Zod, Tailwind CSS 4, Radix Dialog, sonner toasts, zustand (editor state), **OpenLayers** (editor map).
+
+### Prisma or Drizzle?
+
+This project uses **Drizzle**. Both are good ORMs; the deciding point is PostGIS:
+
+| | Prisma | Drizzle |
+|---|---|---|
+| PostGIS geometry columns | Not supported: `Unsupported("geometry")`, can't be read or written with the normal API | A custom column type (`db/schema/postgis.ts`), read and written like any column |
+| Spatial queries (clip, contains, transform) | Only through raw SQL strings (`$queryRaw`) | `sql\`ST_Intersection(...)\`` mixed into typed queries |
+| Queries | Its own object syntax | Reads like SQL, so SQL knowledge carries over |
+| Schema | `schema.prisma` (own language) | TypeScript files (`db/schema/*.ts`) |
+| Generated client | Yes (`prisma generate` step) | No, types come straight from the schema |
+
+Prisma is great for plain CRUD apps; for an app whose core data is geometry, Drizzle keeps the spatial
+code typed and readable.
+
+## Project structure
+
+```
+backend/
+  drizzle/                 SQL migrations (generated by `npm run db:generate`)
+  src/
+    server.ts, app.ts      start the server / build the Express app
+    config/                settings from .env (checked at startup)
+    db/                    Drizzle client, migrate + seed scripts
+      schema/              one file per table group; postgis.ts = geometry column types
+    lib/                   small helpers: session cookie, password, storage paths, job queue…
+    middleware/            requireAuth, requireRole, error handler, request logger
+    permissions/access.ts  who may see / change what
+    modules/               one folder per feature: *.routes.ts → *.service.ts (+ *.schemas.ts)
+      auth, users, label-classes, projects, images (+ processing/), tasks, labels, notifications, export
+    scripts/doctor.ts      `npm run doctor`
+frontend/src/
+  api/                     one file per backend module (axios calls)
+  types/                   the shapes of the API's answers
+  components/              ui/ (Button, Dialog, Tabs…), layout/ (top bar, sidebar, bell, user menu)
+  features/                one folder per screen
+    auth/                  login page, route guards
+    home/                  project cards
+    admin/                 Admin Portal (users, label classes)
+    projects/              project page and its tabs, export dialog
+    tasks/                 "Labeling tasks" list
+    editor/                the annotation editor
+      map/                 OpenLayers code (AnnotationMap class, styles, pixel ↔ map coordinates)
+      panel/               side panel tabs: classes, objects, images
+postman/                   API collection: every endpoint, runs top to bottom
+learn/                     lessons for patches 01–06 (setup, login); later code has short comments instead
+```
+
+## API tests with Postman
+
+Import `postman/GeoAnnotator.postman_collection.json` and `postman/Local.postman_environment.json`,
+select the *GeoAnnotator – Local* environment, and run the folders from top to bottom
+(Admin → Annotator → Auditor → Export). Ids such as `projectId` and `taskId` are remembered between
+requests. In *Admin · Imagery → Upload images*, choose an image file in the Body tab first.
+See [learn/postman.md](learn/postman.md).

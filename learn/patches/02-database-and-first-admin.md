@@ -1,5 +1,8 @@
 # Patch 02: Database and the first admin user
 
+> **Later change:** the database layer moved from Prisma to **Drizzle ORM + PostGIS** (see the main README, "Prisma or Drizzle?"). This lesson still describes the Prisma version; the ideas (tables, migrations, seed) are the same, and the current code is in `backend/src/db/`.
+
+
 | | |
 |---|---|
 | **Screen** | Login (Admin portal): step 2 of 6 |

@@ -3,6 +3,13 @@
 This repository is a **clean rebuild** of GeoAnnotator v2 (the original lives in
 `gamedev20261/test2` and is used only as a reference, never modified).
 
+> **Status: the app is complete** (all three portals). This file is the original plan;
+> [README.md](README.md) describes what was actually built. Changes made while building:
+> **Drizzle ORM + PostGIS** instead of Prisma (the data is spatial), **polling** (TanStack Query
+> `refetchInterval`) instead of Socket.IO, a small in-memory job queue instead of p-queue,
+> Radix Dialog + our own small components instead of shadcn/ui, export as **YOLO / COCO / GeoJSON**,
+> and no mask brush.
+
 The goal is not just a working app. It is for **you to understand every part of it**:
 each module comes with a lesson, a Postman collection to test the API yourself, and
 a "trace a click" walkthrough from the button on screen to the row in the database.
@@ -59,13 +66,13 @@ that make the code harder to read or that can't run (the Python scripts are miss
 | Runtime / language | Node 22 + TypeScript | **Node 22 + TypeScript** | Same. Types catch mistakes before you run the code. |
 | Web framework | Express 4 | **Express 5** | Catches errors from `async` handlers by itself → no `try/catch` in every route. |
 | Database | PostgreSQL 16 | **PostgreSQL 16** (in Docker) | Same. |
-| DB access | Knex + 12 migration files | **Prisma ORM** | One readable `schema.prisma` file describes every table; typed queries; **Prisma Studio** lets you browse the data in a browser while learning. |
+| DB access | Knex + 12 migration files | **Drizzle ORM + PostGIS** | Tables are TypeScript files; typed queries that read like SQL; PostGIS columns and functions (clip, nest check, transform) without leaving the query builder. *(First planned as Prisma, see README → "Prisma or Drizzle?")* |
 | Validation | Zod | **Zod** | Same. |
 | Auth | JWT in `Authorization` header + separate "media tokens" for images | **JWT in an httpOnly cookie** (Bearer header also accepted for Postman) | Images and map tiles load with the cookie automatically, so the whole media-token system disappears. |
 | Image processing | Python + GDAL scripts (**missing from repo**) | **sharp** (libvips) in Node | No Python needed. Makes thumbnails, previews and the zoomable tile pyramid, and cuts dataset chips for export. |
-| Background jobs | Hand-written queues | **p-queue** | A tiny, well-known library instead of custom queue code. |
+| Background jobs | Hand-written queues | **A 30-line in-memory queue** (`lib/job-queue.ts`) | Easy to read; unfinished images are re-queued at startup. |
 | Zip export | Python | **archiver** | Streams zip files directly to the browser. |
-| Real-time | Socket.IO | **Socket.IO** | Same. |
+| Real-time | Socket.IO | **Polling** with TanStack Query | The bell asks every 30 s, image lists every 3 s while processing. No extra server. |
 | Logging | Custom logger | **pino** | Fast, structured, standard. |
 | Security | helmet, cors, rate-limit | **same** | Same. |
 | Dev server | ts-node-dev | **tsx watch** | Faster restart, zero config. |
@@ -382,7 +389,7 @@ Module 00 walks through installing and checking each one.
 Accepted when the build started (any of them can still be revisited):
 
 1. **TypeScript** everywhere (recommended; lessons explain the syntax as it appears) rather than plain JavaScript.
-2. **Prisma** instead of Knex.
+2. ~~Prisma~~ **Drizzle ORM + PostGIS** instead of Knex (changed during the build).
 3. **Replace the Python/GDAL scripts with sharp**. The scripts aren't in the original repo, so this is the only way tiling and export will run.
 4. **Cookie-based login** instead of header tokens + media tokens.
 5. **Global roles = the three portals** (`ADMIN`, `ANNOTATOR`, `AUDITOR`); the project "task manager" role becomes bonus module B3.

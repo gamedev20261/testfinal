@@ -1,0 +1,16 @@
+# Installed packages (recreated with `npm install`)
+node_modules/
+
+# Build output
+dist/
+
+# Secrets: only the .env.example files are committed
+.env
+
+# Generated code and runtime files
+backend/src/generated/
+backend/uploads/
+
+# Editor and OS files
+.DS_Store
+*.log

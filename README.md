@@ -4,15 +4,31 @@ A step-by-step rebuild of GeoAnnotator v2, a web app for labelling satellite and
 images with three portals: **Admin**, **Annotator** and **Auditor**.
 
 - **Start here:** [PLAN.md](PLAN.md) explains the modules, the technology choices and the folder structure.
-- **Lessons:** `docs/lessons/` (one per module, added as each module is built)
-- **API tests:** `postman/` (import into Postman)
+- **Learn:** [learn/README.md](learn/README.md) explains how to study each patch. Every code file has an explanation at the same path under `learn/files/`.
+- **API tests:** `postman/` (import into Postman, see [learn/postman.md](learn/postman.md))
 - **Code:** `backend/` and `frontend/`
 
 The original app (`gamedev20261/test2`) is only a reference and is never modified.
 
+## Run it
+
+```bash
+# Backend: http://localhost:3001
+cd backend
+cp .env.example .env
+npm install
+npm run dev
+```
+
 ## Progress
 
-| Module | Status |
-|---|---|
-| Plan | ✅ Done |
-| 00 Web fundamentals & setup | ⏳ Next |
+### Admin portal → Login screen
+
+| Patch | What it adds | Guide |
+|---|---|---|
+| 01 | Backend: first server (`/api/health`) | [learn/patches/01-backend-first-server.md](learn/patches/01-backend-first-server.md) |
+| 02 | Database and first admin user | ⏳ |
+| 03 | Login API + Postman | ⏳ |
+| 04 | Frontend: first page | ⏳ |
+| 05 | Login screen design | ⏳ |
+| 06 | Connect the screen to the API | ⏳ |

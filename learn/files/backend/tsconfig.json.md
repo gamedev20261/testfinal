@@ -1,6 +1,6 @@
 # `backend/tsconfig.json`
 
-> Added in **patch 01** · [View the file](../../../backend/tsconfig.json)
+> Added in **patch 01** · Changed in **patch 02** · [View the file](../../../backend/tsconfig.json)
 
 ## What it is for
 
@@ -18,6 +18,6 @@ Settings for the TypeScript checker (`npm run typecheck`) and for the editor's r
 | `"esModuleInterop": true` | Lets us write `import express from 'express'` for packages written in the older style. |
 | `"isolatedModules": true` | Warns about code that tools like tsx can't handle file by file. |
 | `"skipLibCheck": true` | Don't type-check the packages inside `node_modules` (faster; their authors already did). |
-| `"include": ["src"]` | Only the `src` folder is our code. |
+| `"include": ["src", "prisma", "prisma.config.ts"]` | The files to check: our code in `src`, plus the seed script and Prisma config (added in patch 02). |
 
 You rarely need to change this file.

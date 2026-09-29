@@ -15,10 +15,14 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/health",
-              "host": ["{{baseUrl}}"],
-              "path": ["health"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
             },
-            "description": "Returns { status: 'ok', time } when the API is up.\n\nWho can call it: anyone.\nUsed by: nothing on screen yet. Later, Docker uses it to check that the backend is healthy."
+            "description": "Returns { status: 'ok', database: 'ok', time } when the API is up and can reach PostgreSQL.\nReturns 503 { status: 'error', database: 'unreachable' } when the database is down (try: docker compose stop db).\n\nWho can call it: anyone.\nUsed by: nothing on screen yet. Later, Docker uses it to check that the backend is healthy."
           },
           "event": [
             {
@@ -27,7 +31,8 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
-                  "pm.test('Body says ok', () => pm.expect(pm.response.json().status).to.eql('ok'));"
+                  "pm.test('Body says ok', () => pm.expect(pm.response.json().status).to.eql('ok'));",
+                  "pm.test('Database is reachable (patch 02)', () => pm.expect(pm.response.json().database).to.eql('ok'));"
                 ]
               }
             }
@@ -39,8 +44,12 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/does-not-exist",
-              "host": ["{{baseUrl}}"],
-              "path": ["does-not-exist"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "does-not-exist"
+              ]
             },
             "description": "A URL with no route. The server answers 404 with a JSON error instead of an HTML page."
           },

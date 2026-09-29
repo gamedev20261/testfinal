@@ -1,6 +1,6 @@
 # `backend/src/config/env.ts`
 
-> Added in **patch 01** · [View the code](../../../../../backend/src/config/env.ts)
+> Added in **patch 01** · Changed in **patch 02** (`DATABASE_URL`) · [View the code](../../../../../backend/src/config/env.ts)
 
 ## What it is for
 
@@ -42,6 +42,7 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().int().positive().default(3001),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
+  DATABASE_URL: z.url(),
 });
 ```
 
@@ -51,6 +52,8 @@ const envSchema = z.object({
 - `PORT`: `z.coerce.number()` converts the text `"3001"` into the number `3001`,
   then it must be a whole (`int`) positive number; default `3001`.
 - `LOG_LEVEL` must be one of four words; default `'info'`.
+- `DATABASE_URL` (patch 02) must be a valid URL. It has **no default**: without it, the
+  server can't work, so a missing value stops it at startup.
 
 We will use Zod the same way to check what users send to the API.
 

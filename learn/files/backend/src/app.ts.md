@@ -1,6 +1,10 @@
 # `backend/src/app.ts`
 
-> Added in **patch 01** · [View the code](../../../../backend/src/app.ts) · Background: [How the web works](../../../concepts/how-the-web-works.md)
+> Added in **patch 01** · Changed in **patch 02** · [View the code](../../../../backend/src/app.ts) · Background: [How the web works](../../../concepts/how-the-web-works.md)
+
+> **Patch 02 change:** the health route moved into its own router,
+> [`modules/health/health.routes.ts`](modules/health/health.routes.ts.md), and is mounted
+> with `app.use('/api/health', healthRouter)`. Section 2 below explains both styles.
 
 ## What it is for
 
@@ -38,6 +42,8 @@ export function createApp() {
 
 ### 2. Routes
 
+In patch 01 the route was written directly on the app:
+
 ```ts
   app.get('/api/health', (_req, res) => {
     res.json({ status: 'ok', time: new Date().toISOString() });
@@ -51,8 +57,17 @@ Read it as: *when a `GET` request for the path `/api/health` arrives, run this f
 - `res.json(object)` converts the object to JSON text, sets
   `Content-Type: application/json`, sets status `200`, and sends it.
 
-A *health check* lets people and tools ask "are you alive?". In patch 02 it will also
-check the database.
+A *health check* lets people and tools ask "are you alive?".
+
+Since patch 02, each feature keeps its routes in its own **router** file, and `app.ts`
+only mounts it:
+
+```ts
+  app.use('/api/health', healthRouter);
+```
+
+"Every request whose path starts with `/api/health` goes to `healthRouter`." This keeps
+`app.ts` short: one line per feature, however many routes the feature has.
 
 ### 3. The "not found" handler
 

@@ -1,0 +1,30 @@
+# PostgreSQL for development.
+#
+#   docker compose up -d      start the database in the background
+#   docker compose ps         is it running? (look for "healthy")
+#   docker compose down       stop it (your data is kept in the "pgdata" volume)
+#
+# The user, password and database name match DATABASE_URL in backend/.env.example.
+# They are only for your own computer; production uses different secrets.
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: geoannotator-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: geo
+      POSTGRES_PASSWORD: geo_dev_password
+      POSTGRES_DB: geoannotator
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U geo -d geoannotator"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:

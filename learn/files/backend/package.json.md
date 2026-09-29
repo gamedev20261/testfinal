@@ -1,6 +1,6 @@
 # `backend/package.json`
 
-> Added in **patch 01** · [View the file](../../../backend/package.json) · Background: [Node, npm and TypeScript](../../concepts/node-npm-typescript.md)
+> Added in **patch 01** · Changed in **patch 02** · [View the file](../../../backend/package.json) · Background: [Node, npm and TypeScript](../../concepts/node-npm-typescript.md)
 
 ## What it is for
 
@@ -19,33 +19,53 @@ expect the older `require()` style.
 ```
 Documents that Node 22 or newer is needed (we use `process.loadEnvFile()`, added in Node 21).
 
-```json
-"scripts": {
-  "dev": "tsx watch src/server.ts",
-  "typecheck": "tsc --noEmit"
-}
-```
-- `npm run dev`: **tsx** runs `src/server.ts` directly (no build step). `watch` restarts
-  the server every time you save a file.
-- `npm run typecheck`: **tsc** checks every file for type errors. `--noEmit` means
-  "only check, don't write any output files".
+### Scripts
+
+| Command | Runs | What it does | Since |
+|---|---|---|---|
+| `npm run dev` | `tsx watch src/server.ts` | Starts the API and restarts it whenever you save a file | 01 |
+| `npm run typecheck` | `tsc --noEmit` | Checks every file for type errors without writing any output | 01 |
+| *(automatic)* | `prisma generate` | `postinstall` runs by itself after every `npm install`. It generates the typed database client in `src/generated/prisma` | 02 |
+| `npm run db:migrate` | `prisma migrate dev` | Applies migrations to your database. After a schema change, it first writes a new migration. | 02 |
+| `npm run db:seed` | `prisma db seed` | Runs `prisma/seed.ts` (creates the first admin) | 02 |
+| `npm run db:studio` | `prisma studio` | Opens a web page to browse and edit the database | 02 |
 
 ### Dependencies (needed to run)
 
-| Package | What we use it for |
-|---|---|
-| `express` | The web framework: receives requests, routes them to our code, sends responses |
-| `helmet` | Adds security headers to every response |
-| `pino` | Logging (printing what the server is doing) |
-| `zod` | Checking that data has the right shape (settings now, request bodies later) |
+| Package | What we use it for | Since |
+|---|---|---|
+| `express` | The web framework: receives requests, routes them to our code, sends responses | 01 |
+| `helmet` | Adds security headers to every response | 01 |
+| `pino` | Logging (printing what the server is doing) | 01 |
+| `zod` | Checking that data has the right shape (settings now, request bodies later) | 01 |
+| `@prisma/client` | The runtime part of Prisma, used by the generated client | 02 |
+| `@prisma/adapter-pg` | Connects Prisma to PostgreSQL through the `pg` driver | 02 |
+| `bcryptjs` | Hashes and checks passwords | 02 |
 
 ### Dev dependencies (only for development)
 
-| Package | What we use it for |
-|---|---|
-| `typescript` | The type checker (`tsc`) |
-| `tsx` | Runs `.ts` files directly, restarts on save |
-| `@types/node`, `@types/express` | Type descriptions for Node and Express, so the editor knows what `req`, `res` and `process` contain |
-| `pino-pretty` | Makes log lines readable in the terminal |
+| Package | What we use it for | Since |
+|---|---|---|
+| `typescript` | The type checker (`tsc`) | 01 |
+| `tsx` | Runs `.ts` files directly, restarts on save | 01 |
+| `@types/node`, `@types/express` | Type descriptions for Node and Express, so the editor knows what `req`, `res` and `process` contain | 01 |
+| `pino-pretty` | Makes log lines readable in the terminal | 01 |
+| `prisma` | The Prisma command-line tool (`migrate`, `generate`, `studio`, `db seed`) | 02 |
 
-More packages are added in later patches; each patch guide says which and why.
+### Overrides
+
+```json
+"overrides": {
+  "mysql2": "^3.24.4",
+  "deepmerge-ts": "^8.0.0"
+}
+```
+
+`npm audit` checks installed packages against a list of known security problems. The
+Prisma tool depends on two packages that had known issues in the versions it asks for.
+(`mysql2` is only used for MySQL databases, which we don't even use.) **overrides**
+tells npm: "wherever these packages appear, install at least these fixed versions".
+Result: `found 0 vulnerabilities`.
+
+> If `npm audit` ever suggests `npm audit fix --force`, don't run it blindly: `--force`
+> may install an *older major version* of a package and break things.

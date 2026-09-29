@@ -13,10 +13,15 @@ The original app (`gamedev20261/test2`) is only a reference and is never modifie
 ## Run it
 
 ```bash
-# Backend: http://localhost:3001
+# 1. Database (PostgreSQL in Docker)
+docker compose up -d
+
+# 2. Backend: http://localhost:3001
 cd backend
 cp .env.example .env
 npm install
+npm run db:migrate
+npm run db:seed        # creates the admin from ADMIN_EMAIL / ADMIN_PASSWORD in .env
 npm run dev
 ```
 
@@ -27,7 +32,7 @@ npm run dev
 | Patch | What it adds | Guide |
 |---|---|---|
 | 01 | Backend: first server (`/api/health`) | [learn/patches/01-backend-first-server.md](learn/patches/01-backend-first-server.md) |
-| 02 | Database and first admin user | ⏳ |
+| 02 | Database and first admin user | [learn/patches/02-database-and-first-admin.md](learn/patches/02-database-and-first-admin.md) |
 | 03 | Login API + Postman | ⏳ |
 | 04 | Frontend: first page | ⏳ |
 | 05 | Login screen design | ⏳ |

@@ -1,4 +1,4 @@
-# PostgreSQL for development.
+# PostgreSQL + PostGIS for development.
 #
 #   docker compose up -d      start the database in the background
 #   docker compose ps         is it running? (look for "healthy")
@@ -9,7 +9,7 @@
 
 services:
   db:
-    image: postgres:16-alpine
+    image: postgis/postgis:16-3.5-alpine
     container_name: geoannotator-db
     restart: unless-stopped
     environment:

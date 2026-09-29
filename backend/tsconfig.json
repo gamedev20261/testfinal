@@ -11,5 +11,5 @@
     "isolatedModules": true,
     "skipLibCheck": true
   },
-  "include": ["src", "prisma", "prisma.config.ts"]
+  "include": ["src", "drizzle.config.ts"]
 }

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { rateLimit } from 'express-rate-limit';
-import { loginSchema } from './auth.schemas';
-import { login } from './auth.service';
+import { loginSchema, changePasswordSchema } from './auth.schemas';
+import { login, changePassword } from './auth.service';
 import { requireAuth } from '../../middleware/require-auth';
 import { createSessionToken, setSessionCookie, clearSessionCookie } from '../../lib/session';
 
@@ -35,4 +35,14 @@ authRouter.post('/logout', (_req, res) => {
 // GET /api/auth/me → who is logged in? The frontend asks this when a page loads.
 authRouter.get('/me', requireAuth, (req, res) => {
   res.json({ user: req.user });
+});
+
+// POST /api/auth/change-password  { currentPassword, newPassword }
+// Other logins of this user end; this browser gets a fresh session.
+authRouter.post('/change-password', loginLimiter, requireAuth, async (req, res) => {
+  const { currentPassword, newPassword } = changePasswordSchema.parse(req.body);
+  await changePassword(req.user!.id, currentPassword, newPassword);
+
+  setSessionCookie(res, createSessionToken(req.user!.id));
+  res.status(204).end();
 });

@@ -1,4 +1,4 @@
-import { prisma } from './prisma';
+import { pool } from '../db/client';
 import { logger } from './logger';
 import { env } from '../config/env';
 
@@ -12,12 +12,10 @@ export function describeDatabase(url: string): string {
 // Asks the database one tiny question. Returns null when it answers, otherwise the reason why not.
 export async function findDatabaseProblem(): Promise<string | null> {
   try {
-    await prisma.$queryRaw`SELECT 1`;
+    await pool.query('SELECT 1');
     return null;
   } catch (error) {
-    // Prisma wraps the database's own message: "... Message: `password authentication failed ...`"
-    const text = error instanceof Error ? error.message : String(error);
-    return /Message: `(.+)`/.exec(text)?.[1] ?? text.trim().split('\n').at(-1) ?? text;
+    return error instanceof Error ? error.message : String(error);
   }
 }
 
@@ -29,7 +27,7 @@ export function databaseFix(problem: string): string {
   if (/database ".*" does not exist/.test(problem)) {
     return 'The database is not created yet: run "npm run db:migrate".';
   }
-  if (problem.includes("Can't reach database server") || problem.includes('timeout')) {
+  if (problem.includes('ECONNREFUSED') || problem.includes('timeout') || problem.includes('ENOTFOUND')) {
     return 'PostgreSQL is not running, or uses another port. Docker: "docker compose up -d". Mac: start it in Postgres.app, or "brew services start postgresql@16". Windows: Win+R → services.msc → postgresql-x64-… → Start.';
   }
   return 'Check DATABASE_URL in backend/.env (learn/local-postgres.md).';

@@ -1,9 +1,9 @@
 // `npm run doctor`: checks everything the app needs on this computer, in order,
 // and says how to fix the first problem it finds.
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { z } from 'zod';
-import type { PrismaClient } from '../generated/prisma/client';
+import type { Pool } from 'pg';
 import { envSchema } from '../config/env-schema';
 import { isSupportedNode, NODE_REQUIREMENT } from '../config/node-version';
 
@@ -30,8 +30,8 @@ async function main() {
   }
   ok(`Node.js ${process.version}`);
 
-  // 2. Packages (npm install also generates the database client)
-  if (!existsSync('src/generated/prisma')) {
+  // 2. Packages
+  if (!existsSync('node_modules/drizzle-orm')) {
     fail('Backend packages are not installed', 'run "npm install" in the backend folder');
     return;
   }
@@ -60,9 +60,9 @@ async function main() {
     warn('JWT_SECRET is still the example value', 'fine on your own computer; make your own before anyone else uses the app');
   }
 
-  // 5. The database connection
+  // 5. The database (loaded only now, because it reads the settings as it loads)
   const { describeDatabase, findDatabaseProblem, databaseFix } = await import('../lib/database-check');
-  const { prisma } = await import('../lib/prisma');
+  const { pool } = await import('../db/client');
   try {
     const target = describeDatabase(DATABASE_URL);
     const problem = await findDatabaseProblem();
@@ -72,26 +72,34 @@ async function main() {
     }
     ok(`Database reachable: ${target}`);
 
-    // 6. The tables
-    const pending = await pendingMigrations(prisma);
-    if (pending.length > 0) {
-      fail(`${pending.length} migration(s) not applied yet: ${pending.join(', ')}`, 'run "npm run db:migrate"');
+    // 6. PostGIS installed on the PostgreSQL server?
+    const postgis = await pool.query("SELECT default_version FROM pg_available_extensions WHERE name = 'postgis'");
+    if (postgis.rowCount === 0) {
+      fail('PostGIS is not installed on your PostgreSQL server', 'Mac installer: Application Stack Builder → Spatial Extensions → PostGIS · Homebrew: brew install postgis · Postgres.app: included · Windows: Stack Builder · Docker: included');
+      return;
+    }
+    ok(`PostGIS ${postgis.rows[0].default_version} available`);
+
+    // 7. The tables
+    const pending = await pendingMigrations(pool);
+    if (pending > 0) {
+      fail(`${pending} migration(s) not applied yet`, 'run "npm run db:migrate"');
       return;
     }
     ok('All migrations applied (tables are up to date)');
 
-    // 7. Someone to log in with
-    const admins = await prisma.user.findMany({ where: { role: 'ADMIN' }, select: { email: true } });
-    if (admins.length === 0) {
+    // 8. Someone to log in with
+    const admins = await pool.query("SELECT email FROM users WHERE role = 'ADMIN' AND deleted_at IS NULL");
+    if (admins.rowCount === 0) {
       fail('There is no admin account yet', 'run "npm run db:seed"');
       return;
     }
-    ok(`Admin account: ${admins.map((admin) => admin.email).join(', ')}`);
+    ok(`Admin account: ${admins.rows.map((row) => row.email).join(', ')}`);
   } finally {
-    await prisma.$disconnect();
+    await pool.end();
   }
 
-  // 8. The port the backend will use
+  // 9. The port the backend will use
   if (await isPortInUse(PORT)) {
     warn(`Port ${PORT} is already in use`, 'fine if the backend is already running in another terminal; otherwise close the program using it, or change PORT in backend/.env');
   } else {
@@ -101,7 +109,7 @@ async function main() {
     warn(`PORT is ${PORT}, but the frontend sends /api requests to port 3001`, 'set PORT=3001 in backend/.env, or change the proxy in frontend/vite.config.ts');
   }
 
-  // 9. The frontend
+  // 10. The frontend
   if (!existsSync('../frontend/node_modules')) {
     fail('Frontend packages are not installed', 'in a terminal: cd frontend, then npm install');
     return;
@@ -109,17 +117,14 @@ async function main() {
   ok('Frontend packages installed');
 }
 
-// Migration folders in prisma/migrations that the database has not run yet
-async function pendingMigrations(prisma: PrismaClient): Promise<string[]> {
-  const folders = readdirSync('prisma/migrations', { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name);
-  type Row = { migration_name: string };
-  const applied = await prisma.$queryRaw<Row[]>`
-    SELECT migration_name FROM _prisma_migrations WHERE finished_at IS NOT NULL
-  `.catch((): Row[] => []); // no _prisma_migrations table yet = nothing applied
-  const done = new Set(applied.map((row) => row.migration_name));
-  return folders.filter((folder) => !done.has(folder));
+// How many migrations in drizzle/ the database has not run yet
+async function pendingMigrations(pool: Pool): Promise<number> {
+  const journal = JSON.parse(readFileSync('drizzle/meta/_journal.json', 'utf8')) as { entries: unknown[] };
+  const applied = await pool
+    .query('SELECT count(*)::int AS count FROM drizzle.__drizzle_migrations')
+    .then((result) => result.rows[0].count as number)
+    .catch(() => 0); // no migrations table yet = nothing applied
+  return Math.max(journal.entries.length - applied, 0);
 }
 
 // True when another program already listens on this port

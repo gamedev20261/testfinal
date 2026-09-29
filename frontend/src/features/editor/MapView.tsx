@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { Maximize, Minus, Plus } from 'lucide-react';
 import 'ol/ol.css';
 import { imagesApi } from '../../api/images';
-import type { Label, ShapeGeometry, ShapeType } from '../../types/label';
+import type { Label, Position, ShapeGeometry, ShapeType } from '../../types/label';
 import type { LabelClass } from '../../types/project';
 import type { TaskImage } from '../../types/task';
-import { AnnotationMap, type Tool } from './map/annotation-map';
+import { AnnotationMap, type PixelExtent, type Tool } from './map/annotation-map';
+import { TOOL_INFO } from './editor-mode';
 
 type Props = {
   image: TaskImage;
@@ -16,15 +17,19 @@ type Props = {
   showNames: boolean;
   selectedId: string | null;
   zoomToSelected: number; // changes when the objects list asks to zoom
+  brushRadius: number;
+  brushErase: boolean;
   onDrawn: (shapeType: ShapeType, geometry: ShapeGeometry) => Promise<boolean>;
   onChanged: (labelId: string, geometry: ShapeGeometry) => Promise<boolean>;
   onSelect: (labelId: string | null) => void;
+  onWand: (point: Position, view: PixelExtent) => Promise<unknown>;
+  onBrush: (stroke: Position[], radius: number, erase: boolean) => Promise<unknown>;
   mapRef: React.RefObject<AnnotationMap | null>;
 };
 
 // The React side of the map: creates AnnotationMap once, then passes every change of props to it
 export function MapView(props: Props) {
-  const { image, labels, classes, tool, editable, showNames, selectedId, zoomToSelected, mapRef } = props;
+  const { image, labels, classes, tool, editable, showNames, selectedId, zoomToSelected, brushRadius, brushErase, mapRef } = props;
   const target = useRef<HTMLDivElement>(null);
   const callbacks = useRef(props);
   callbacks.current = props;
@@ -35,6 +40,8 @@ export function MapView(props: Props) {
       onDrawn: (...args) => callbacks.current.onDrawn(...args),
       onChanged: (...args) => callbacks.current.onChanged(...args),
       onSelect: (id) => callbacks.current.onSelect(id),
+      onWand: (...args) => callbacks.current.onWand(...args),
+      onBrush: (...args) => callbacks.current.onBrush(...args),
       onPointer: setPointer,
     });
     mapRef.current = map;
@@ -54,6 +61,7 @@ export function MapView(props: Props) {
   useEffect(() => mapRef.current?.setEditable(editable), [editable, mapRef]);
   useEffect(() => mapRef.current?.setTool(tool), [tool, editable, mapRef]);
   useEffect(() => mapRef.current?.setShowNames(showNames), [showNames, mapRef]);
+  useEffect(() => mapRef.current?.setBrush(brushRadius, brushErase), [brushRadius, brushErase, mapRef]);
   useEffect(() => mapRef.current?.selectLabel(selectedId), [selectedId, mapRef]);
   useEffect(() => {
     if (zoomToSelected) mapRef.current?.selectLabel(callbacks.current.selectedId, true);
@@ -65,6 +73,11 @@ export function MapView(props: Props) {
       {!ready && (
         <div className="absolute inset-0 flex items-center justify-center bg-slate-800 text-sm text-slate-300">
           {image.status === 'FAILED' ? 'This image could not be processed.' : 'This image is still being processed…'}
+        </div>
+      )}
+      {editable && tool !== 'SELECT' && (
+        <div className="pointer-events-none absolute top-3 left-3 max-w-md rounded bg-black/60 px-2 py-1 text-[11px] text-white">
+          <strong>{TOOL_INFO[tool].name}:</strong> {TOOL_INFO[tool].hint} Middle mouse button: move the image.
         </div>
       )}
       <div className="absolute right-3 bottom-3 flex flex-col overflow-hidden rounded-lg border border-border bg-white shadow">

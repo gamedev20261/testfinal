@@ -53,7 +53,9 @@ export function TasksTab({ projectId, onExport }: { projectId: string; onExport:
           <p className="mt-0.5 text-xs text-text-secondary">Assign imagery, exactly 1 annotator, and 1 auditor per task.</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="secondary" size="sm" onClick={onExport}><Download size={14} /> Export Dataset ({passed} Passed)</Button>
+          <Button variant="secondary" size="sm" onClick={onExport} disabled={passed === 0} title={passed === 0 ? 'A task can be exported once it has passed review' : undefined}>
+            <Download size={14} /> Export Dataset ({passed} Passed)
+          </Button>
           <Button size="sm" onClick={() => setEditing('new')}><Plus size={14} /> New Task</Button>
         </div>
       </div>

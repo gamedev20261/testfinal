@@ -40,22 +40,26 @@ export function useLabelActions(taskId: string, imageId: string) {
 
   // Returns false when the server said no (the message is shown as a toast)
   async function attempt(action: () => Promise<void>) {
+    return (await attemptTo(action)) !== null;
+  }
+  async function attemptTo<T>(action: () => Promise<T>): Promise<T | null> {
     try {
-      await action();
-      return true;
+      return await action();
     } catch (error) {
       toast.error(apiErrorMessage(error, 'Could not save the shape'));
-      return false;
+      return null;
     }
   }
 
   return {
+    // The saved shape, or null
     create: (input: NewLabel) =>
-      attempt(async () => {
+      attemptTo(async () => {
         const label = await tasksApi.createLabel(taskId, imageId, input);
         put(label);
         refreshTask();
         record({ undo: () => remove(label.id), redo: () => restore(label.id) });
+        return label;
       }),
 
     changeGeometry: (id: string, geometry: ShapeGeometry) =>

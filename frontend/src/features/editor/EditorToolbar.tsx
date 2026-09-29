@@ -1,17 +1,24 @@
 import { Link } from 'react-router';
-import { ChevronLeft, ChevronRight, Circle, Hexagon, MousePointer2, Redo2, Square, Undo2, Type } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Eraser, Hexagon, MousePointer2, Paintbrush, Redo2, Square, Undo2, Type, WandSparkles } from 'lucide-react';
 import { cn } from '../../lib/cn';
 import { Select } from '../../components/ui/Select';
 import { TaskStatusBadge } from '../../components/task/TaskStatus';
 import type { TaskDetail } from '../../types/task';
-import type { ShapeType } from '../../types/label';
 import { useEditorStore } from './editor-store';
-import { TOOLS_BY_TYPE, SHAPE_NAME, type EditorMode } from './editor-mode';
+import { TOOLS_BY_TYPE, TOOL_INFO, type EditorMode } from './editor-mode';
 import { WorkflowButtons } from './WorkflowButtons';
 import type { Tool } from './map/annotation-map';
 
-const TOOL_ICON = { SELECT: MousePointer2, BBOX: Square, POLYGON: Hexagon, POINT: Circle };
-export const TOOL_KEY: Record<Tool, string> = { SELECT: 'V', BBOX: 'B', POLYGON: 'P', POINT: 'O' };
+// The rotated box is a turned square
+const RotatedSquare = ({ size }: { size: number }) => <Square size={size} className="rotate-[25deg]" />;
+const TOOL_ICON: Record<Tool, React.ComponentType<{ size: number }>> = {
+  SELECT: MousePointer2,
+  BBOX: Square,
+  OBB: RotatedSquare,
+  POLYGON: Hexagon,
+  WAND: WandSparkles,
+  BRUSH: Paintbrush,
+};
 
 type Props = {
   detail: TaskDetail;
@@ -24,6 +31,7 @@ type Props = {
 
 export function EditorToolbar({ detail, mode, imageIndex, onImage, onRejectImage, onFailTask }: Props) {
   const { tool, setTool, activeClassId, setActiveClass, undoStack, redoStack, undo, redo, showNames, toggleNames } = useEditorStore();
+  const { brushRadius, brushErase, setBrush, wandTolerance, setWandTolerance } = useEditorStore();
   const tools: Tool[] = ['SELECT', ...TOOLS_BY_TYPE[detail.project.type]];
   const count = detail.images.length;
 
@@ -49,8 +57,8 @@ export function EditorToolbar({ detail, mode, imageIndex, onImage, onRejectImage
                 <button
                   key={t}
                   onClick={() => setTool(t)}
-                  title={`${t === 'SELECT' ? 'Select / edit' : SHAPE_NAME[t as ShapeType]} (${TOOL_KEY[t]})`}
-                  aria-label={t === 'SELECT' ? 'Select tool' : `${SHAPE_NAME[t as ShapeType]} tool`}
+                  title={`${TOOL_INFO[t].name} (${TOOL_INFO[t].key}): ${TOOL_INFO[t].hint}`}
+                  aria-label={`${TOOL_INFO[t].name} tool`}
                   aria-pressed={tool === t}
                   className={cn('rounded-md p-1.5', tool === t ? 'bg-primary text-white' : 'text-text-secondary hover:bg-surface-alt')}
                 >
@@ -59,6 +67,26 @@ export function EditorToolbar({ detail, mode, imageIndex, onImage, onRejectImage
               );
             })}
           </div>
+          {tool === 'BRUSH' && (
+            <div className="flex items-center gap-2 text-xs">
+              <label className="flex items-center gap-1.5" title="Brush size in image pixels">
+                Size
+                <input type="range" min={2} max={150} value={brushRadius} onChange={(e) => setBrush({ brushRadius: Number(e.target.value) })} className="w-20" aria-label="Brush size" />
+                <span className="w-7 font-mono text-[11px] text-text-secondary">{brushRadius}</span>
+              </label>
+              <div className="flex rounded-lg border border-border p-0.5" title="Hold Shift to switch while painting">
+                <button onClick={() => setBrush({ brushErase: false })} aria-pressed={!brushErase} className={cn('rounded-md p-1', !brushErase ? 'bg-primary text-white' : 'text-text-secondary hover:bg-surface-alt')} aria-label="Paint"><Paintbrush size={13} /></button>
+                <button onClick={() => setBrush({ brushErase: true })} aria-pressed={brushErase} className={cn('rounded-md p-1', brushErase ? 'bg-danger text-white' : 'text-text-secondary hover:bg-surface-alt')} aria-label="Erase from the selected shape"><Eraser size={13} /></button>
+              </div>
+            </div>
+          )}
+          {tool === 'WAND' && (
+            <label className="flex items-center gap-1.5 text-xs" title="How different a colour may be and still belong to the object">
+              Tolerance
+              <input type="range" min={4} max={128} value={wandTolerance} onChange={(e) => setWandTolerance(Number(e.target.value))} className="w-20" aria-label="Magic pen tolerance" />
+              <span className="w-7 font-mono text-[11px] text-text-secondary">{wandTolerance}</span>
+            </label>
+          )}
           <div className="flex">
             <button onClick={() => undo()} disabled={!undoStack.length} className="rounded p-1.5 text-text-secondary hover:bg-surface-alt disabled:opacity-30" aria-label="Undo (Ctrl+Z)" title="Undo (Ctrl+Z)"><Undo2 size={15} /></button>
             <button onClick={() => redo()} disabled={!redoStack.length} className="rounded p-1.5 text-text-secondary hover:bg-surface-alt disabled:opacity-30" aria-label="Redo (Ctrl+Y)" title="Redo (Ctrl+Y)"><Redo2 size={15} /></button>

@@ -1,10 +1,12 @@
 import type { ReviewStatus } from './task';
 
-export type ShapeType = 'BBOX' | 'POLYGON' | 'POINT';
+// OBB = oriented (rotated) box. Points can no longer be drawn; old ones are still shown.
+export type ShapeType = 'BBOX' | 'OBB' | 'POLYGON' | 'POINT';
 
 // GeoJSON in image pixels: x to the right, y down from the top-left corner
 export type Position = [number, number];
-export type ShapeGeometry = { type: 'Point'; coordinates: Position } | { type: 'Polygon'; coordinates: Position[][] };
+export type PolygonGeometry = { type: 'Polygon'; coordinates: Position[][] };
+export type ShapeGeometry = { type: 'Point'; coordinates: Position } | PolygonGeometry;
 
 export type Label = {
   id: string;

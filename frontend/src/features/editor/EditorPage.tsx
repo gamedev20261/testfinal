@@ -3,7 +3,9 @@ import { useParams, useSearchParams } from 'react-router';
 import { toast } from 'sonner';
 import { Tabs } from '../../components/ui/Tabs';
 import { LoadError, Spinner } from '../../components/ui/States';
-import type { ShapeGeometry, ShapeType } from '../../types/label';
+import { tasksApi } from '../../api/tasks';
+import { apiErrorMessage } from '../../api/client';
+import type { PolygonGeometry, Position, ShapeGeometry, ShapeType } from '../../types/label';
 import type { TaskDetail } from '../../types/task';
 import { useTaskDetail, useImageLabels } from './queries';
 import { useEditorStore } from './editor-store';
@@ -20,7 +22,7 @@ import { CommentDialog } from './CommentDialog';
 import { ClassesPanel } from './panel/ClassesPanel';
 import { ObjectsPanel } from './panel/ObjectsPanel';
 import { ImagesPanel } from './panel/ImagesPanel';
-import type { AnnotationMap, Tool } from './map/annotation-map';
+import type { AnnotationMap, PixelExtent, Tool } from './map/annotation-map';
 
 // /tasks/:taskId — loads the task, then shows the editor
 export function EditorPage() {
@@ -56,6 +58,8 @@ function Editor({ detail }: { detail: TaskDetail }) {
   useEffect(() => {
     if (!classes.some((c) => c.id === store.activeClassId)) store.setActiveClass(classes[0]?.id ?? null);
     if (!tools.includes(store.tool)) store.setTool('SELECT');
+    // Segmentation shows each object's class name on it (L hides them)
+    store.setShowNames(detail.project.type === 'SEGMENTATION');
   }, [task.id]);
 
   const openImage = (index: number) => {
@@ -68,7 +72,39 @@ function Editor({ detail }: { detail: TaskDetail }) {
       toast.error('Choose a label class first');
       return false;
     }
-    return actions.create({ labelClassId: store.activeClassId, shapeType, geometry });
+    return !!(await actions.create({ labelClassId: store.activeClassId, shapeType, geometry }));
+  }
+
+  // A polygon from the magic pen or the brush, saved with the active class
+  const createPolygon = (geometry: ShapeGeometry) =>
+    actions.create({ labelClassId: store.activeClassId!, shapeType: 'POLYGON', geometry });
+
+  async function onWand(point: Position, view: PixelExtent) {
+    if (!store.activeClassId) return void toast.error('Choose a label class first');
+    try {
+      const geometry = await tasksApi.magicWand(task.id, image.id, { x: point[0], y: point[1], tolerance: store.wandTolerance, view });
+      await createPolygon(geometry);
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'The magic pen could not find an object here'));
+    }
+  }
+
+  async function onBrush(stroke: Position[], radius: number, erase: boolean) {
+    const selected = labels.find((l) => l.id === store.selectedId && l.shapeType === 'POLYGON');
+    if (erase && !selected) return void toast.error('Select a shape first: erasing trims the selected shape');
+    if (!selected && !store.activeClassId) return void toast.error('Choose a label class first');
+    try {
+      const result = await tasksApi.brush(task.id, image.id, { stroke, radius, erase, base: selected?.geometry as PolygonGeometry | undefined });
+      if (result.action === 'create') {
+        // Selected, so the next strokes join it (Esc starts a new shape)
+        const label = await createPolygon(result.geometry);
+        if (label) store.select(label.id);
+      }
+      if (result.action === 'update') await actions.changeGeometry(selected!.id, result.geometry);
+      if (result.action === 'delete' && (await actions.remove(selected!.id))) store.select(null);
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Could not paint the shape'));
+    }
   }
 
   // 1-9 or a click in the classes list: change the selected shape, or the class for new shapes
@@ -125,9 +161,13 @@ function Editor({ detail }: { detail: TaskDetail }) {
             showNames={store.showNames}
             selectedId={store.selectedId}
             zoomToSelected={zoomToken}
+            brushRadius={store.brushRadius}
+            brushErase={store.brushErase}
             onDrawn={onDrawn}
             onChanged={actions.changeGeometry}
             onSelect={store.select}
+            onWand={onWand}
+            onBrush={onBrush}
             mapRef={mapRef}
           />
         </div>

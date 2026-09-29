@@ -42,7 +42,7 @@ export function ImageryTab({ projectId, onUpload, isUploading }: { projectId: st
         <div>
           <h3 className="flex items-center gap-2 text-sm font-semibold"><ImageIcon size={16} className="text-primary" /> Project imagery</h3>
           <p className="mt-0.5 text-xs text-text-secondary">
-            GeoTIFF, TIFF, JPEG or PNG. 16-bit and multi-band images are converted for display; GeoTIFFs keep their map position.
+            TIFF or GeoTIFF only (.tif, .tiff). 16-bit and multi-band images are converted for display; GeoTIFFs keep their map position.
           </p>
         </div>
         <Button size="sm" onClick={onUpload} disabled={isUploading}>

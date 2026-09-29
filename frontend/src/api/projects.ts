@@ -6,7 +6,9 @@ import type { Task } from '../types/task';
 export type CreateProjectInput = { name: string; description: string; type: ProjectType; labelClassIds: string[] };
 export type UpdateProjectInput = Partial<{ name: string; description: string; type: ProjectType; status: ProjectStatus }>;
 export type TaskInput = { name: string; description: string; annotatorId: string; auditorId: string; imageIds: string[] };
-export type ExportOptions = { format: 'YOLO' | 'COCO' | 'GEOJSON'; tasks: 'PASSED' | 'ALL'; chipSize: number; includeImages: boolean };
+export type ExportFormat = 'YOLO' | 'YOLO_OBB' | 'COCO' | 'GEOJSON' | 'MASKS';
+// chipSize 0 = whole images; mergeClasses only matters for MASKS
+export type ExportOptions = { format: ExportFormat; chipSize: number; includeImages: boolean; mergeClasses: boolean };
 
 // /api/projects and everything inside one project
 export const projectsApi = {
@@ -78,13 +80,18 @@ export const projectsApi = {
     return data.task;
   },
 
-  // Export: the summary first, then the browser downloads the zip from exportUrl
-  async exportSummary(id: string, tasks: ExportOptions['tasks']) {
-    const { data } = await api.get<{ imageCount: number; labelCount: number }>(`/projects/${id}/export/summary`, { params: { tasks } });
+  // Export (tasks that passed review only): the summary first, then the browser downloads the zip from exportUrl
+  async exportSummary(id: string) {
+    const { data } = await api.get<{ passedTaskCount: number; imageCount: number; labelCount: number }>(`/projects/${id}/export/summary`);
     return data;
   },
   exportUrl(id: string, options: ExportOptions) {
-    const params = new URLSearchParams({ ...options, chipSize: String(options.chipSize), includeImages: String(options.includeImages) });
+    const params = new URLSearchParams({
+      format: options.format,
+      chipSize: String(options.chipSize),
+      includeImages: String(options.includeImages),
+      mergeClasses: String(options.mergeClasses),
+    });
     return `/api/projects/${id}/export?${params}`;
   },
 };

@@ -6,17 +6,28 @@ import VectorLayer from 'ol/layer/Vector';
 import VectorSource from 'ol/source/Vector';
 import Zoomify from 'ol/source/Zoomify';
 import Projection from 'ol/proj/Projection';
-import { Draw, Modify, Select, Translate } from 'ol/interaction';
+import Point from 'ol/geom/Point';
+import { DragPan, Draw, Modify, Select, Translate } from 'ol/interaction';
+import type Interaction from 'ol/interaction/Interaction';
 import { createBox } from 'ol/interaction/Draw';
+import { noModifierKeys, primaryAction } from 'ol/events/condition';
 import { defaults as defaultControls } from 'ol/control/defaults';
-import type Point from 'ol/geom/Point';
 import type Polygon from 'ol/geom/Polygon';
-import type { Label, ShapeGeometry, ShapeType } from '../../../types/label';
+import type { Coordinate } from 'ol/coordinate';
+import type { Label, Position, ShapeGeometry, ShapeType } from '../../../types/label';
 import type { LabelClass } from '../../../types/project';
-import { toOlGeometry, toShapeGeometry, straightenBox, isTiny } from './map-geometry';
-import { shapeStyle, pendingStyle } from './map-styles';
+import { toOlGeometry, toShapeGeometry, toPixel, straightenBox, isTiny } from './map-geometry';
+import { rotatedBoxFromClicks, straightenRotatedBox } from './obb';
+import { RotateBoxInteraction } from './rotate-interaction';
+import { BrushInteraction } from './brush-interaction';
+import { shapeStyle, pendingStyle, sketchStyle, brushStyle } from './map-styles';
 
-export type Tool = 'SELECT' | ShapeType;
+// SELECT edits shapes; BBOX, OBB (rotated box) and POLYGON draw; WAND (magic pen) and BRUSH make polygons
+export type Tool = 'SELECT' | 'BBOX' | 'OBB' | 'POLYGON' | 'WAND' | 'BRUSH';
+type DrawTool = 'BBOX' | 'OBB' | 'POLYGON';
+
+// [minX, minY, maxX, maxY] in image pixels
+export type PixelExtent = [number, number, number, number];
 
 // What the map tells the page. A save that returns false puts the shape back.
 export type MapCallbacks = {
@@ -24,9 +35,12 @@ export type MapCallbacks = {
   onChanged: (labelId: string, geometry: ShapeGeometry) => Promise<boolean>;
   onSelect: (labelId: string | null) => void;
   onPointer: (position: { x: number; y: number } | null) => void;
+  onWand: (point: Position, view: PixelExtent) => Promise<unknown>;
+  onBrush: (stroke: Position[], radius: number, erase: boolean) => Promise<unknown>;
 };
 
 type ShapeGeom = Point | Polygon;
+type ChangeKind = 'reshape' | 'move' | 'rotate';
 
 // Everything OpenLayers does in the editor, behind a few simple methods.
 // The React page calls showImage(), setLabels(), setTool()… and listens to the callbacks.
@@ -35,11 +49,15 @@ export class AnnotationMap {
   private tiles = new TileLayer({ preload: 2 });
   private shapes = new VectorSource<Feature<ShapeGeom>>();
   private pending = new VectorSource();
+  private brushSource = new VectorSource();
   private shapeLayer: VectorLayer;
   private select: Select;
   private modify: Modify;
   private translate: Translate;
+  private rotate: RotateBoxInteraction;
+  private middlePan: DragPan;
   private draw: Draw | null = null;
+  private brush: BrushInteraction | null = null;
   private labels = new Map<string, Label>();
   private classes = new Map<string, LabelClass>();
   private before = new Map<string, ShapeGeom>(); // shape geometry before a drag, to straighten boxes
@@ -47,22 +65,30 @@ export class AnnotationMap {
   private showNames = false;
   private editable = false;
   private tool: Tool = 'SELECT';
+  private brushRadius = 12;
+  private brushErase = false;
   private drawing = false; // a polygon or box has been started but not finished
 
   constructor(target: HTMLElement, private callbacks: MapCallbacks) {
     this.shapeLayer = new VectorLayer({
       source: this.shapes,
-      style: (feature) =>
-        shapeStyle(feature, {
+      style: (feature, resolution) =>
+        shapeStyle(feature, resolution, {
           colorOf: (id) => this.classes.get(id)?.color ?? '#718096',
           nameOf: (id) => this.classes.get(id)?.name ?? '',
           selectedId: this.selectedId,
           showNames: this.showNames,
+          editing: this.activeTool() === 'SELECT' && this.editable,
         }),
     });
     this.map = new OlMap({
       target,
-      layers: [this.tiles, this.shapeLayer, new VectorLayer({ source: this.pending, style: pendingStyle })],
+      layers: [
+        this.tiles,
+        this.shapeLayer,
+        new VectorLayer({ source: this.pending, style: pendingStyle }),
+        new VectorLayer({ source: this.brushSource, style: brushStyle }),
+      ],
       controls: defaultControls({ zoom: false, attribution: false, rotate: false }), // our own zoom buttons are in MapView
     });
 
@@ -74,28 +100,54 @@ export class AnnotationMap {
       this.callbacks.onSelect(this.selectedId);
     });
 
-    // Drag a corner to reshape, drag the inside to move. New corners only on polygons.
+    // Drag a corner to reshape, drag the inside to move, drag the knob of a rotated box to turn it.
+    // New corners only on polygons.
     this.modify = new Modify({
       features: this.select.getFeatures(),
       insertVertexCondition: () => this.labels.get(this.selectedId ?? '')?.shapeType === 'POLYGON',
     });
     this.translate = new Translate({ features: this.select.getFeatures() });
+    this.rotate = new RotateBoxInteraction({
+      target: () => {
+        const feature = this.selectedId ? this.shapes.getFeatureById(this.selectedId) : null;
+        return feature && this.labels.get(this.selectedId!)?.shapeType === 'OBB' ? (feature as Feature<Polygon>) : null;
+      },
+      onStart: (feature) => this.rememberBefore([feature]),
+      onEnd: (feature) => void this.saveChange(feature, 'rotate'),
+    });
     this.modify.on('modifystart', (event) => this.rememberBefore(event.features.getArray() as Feature<ShapeGeom>[]));
     this.translate.on('translatestart', (event) => this.rememberBefore(event.features.getArray() as Feature<ShapeGeom>[]));
-    this.modify.on('modifyend', (event) => event.features.forEach((f) => void this.saveChange(f as Feature<ShapeGeom>)));
-    this.translate.on('translateend', (event) => event.features.forEach((f) => void this.saveChange(f as Feature<ShapeGeom>)));
+    this.modify.on('modifyend', (event) => event.features.forEach((f) => void this.saveChange(f as Feature<ShapeGeom>, 'reshape')));
+    this.translate.on('translateend', (event) => event.features.forEach((f) => void this.saveChange(f as Feature<ShapeGeom>, 'move')));
 
     this.map.addInteraction(this.select);
     this.map.addInteraction(this.translate);
     this.map.addInteraction(this.modify);
-    this.setEditable(false);
+    this.map.addInteraction(this.rotate);
+
+    // Hold the middle mouse button to drag the image, whatever the tool. It is the last interaction,
+    // so it sees the press first, and it keeps it: drawing tools don't add a point or start a box.
+    this.middlePan = new DragPan({ condition: (event) => (event.originalEvent as PointerEvent).button === 1 });
+    this.middlePan.stopDown = (handled) => handled;
+    this.map.addInteraction(this.middlePan);
+    const viewport = this.map.getViewport();
+    viewport.addEventListener('mousedown', (event) => event.button === 1 && event.preventDefault()); // no browser auto-scroll
+
+    // Magic pen: a click asks the server for the object's outline
+    this.map.on('click', (event) => {
+      if (this.activeTool() === 'WAND') void this.useWand(event.coordinate);
+    });
 
     // Pixel under the mouse, shown under the map
     this.map.on('pointermove', (event) => {
       const [x, y] = event.coordinate;
       this.callbacks.onPointer({ x: Math.round(x), y: Math.round(-y) });
     });
-    this.map.getViewport().addEventListener('mouseleave', () => this.callbacks.onPointer(null));
+    viewport.addEventListener('mouseleave', () => {
+      this.callbacks.onPointer(null);
+      this.brush?.hideCursor();
+    });
+    this.applyTool();
   }
 
   // Loads an image's Zoomify tiles and fits it on screen
@@ -134,14 +186,15 @@ export class AnnotationMap {
     for (const label of labels) {
       const old = this.labels.get(label.id);
       const feature = this.shapes.getFeatureById(label.id) as Feature<ShapeGeom> | null;
+      const properties = { labelClassId: label.labelClassId, reviewStatus: label.reviewStatus, shapeType: label.shapeType };
       if (!feature) {
         const created = new Feature<ShapeGeom>(toOlGeometry(label.geometry));
         created.setId(label.id);
-        created.setProperties({ labelClassId: label.labelClassId, reviewStatus: label.reviewStatus });
+        created.setProperties(properties);
         this.shapes.addFeature(created);
       } else if (old?.updatedAt !== label.updatedAt || old.reviewStatus !== label.reviewStatus) {
         feature.setGeometry(toOlGeometry(label.geometry));
-        feature.setProperties({ labelClassId: label.labelClassId, reviewStatus: label.reviewStatus });
+        feature.setProperties(properties);
       }
     }
     this.labels = new Map(labels.map((label) => [label.id, label]));
@@ -158,34 +211,22 @@ export class AnnotationMap {
     this.shapeLayer.changed();
   }
 
-  // Annotators may move and reshape; everyone else only looks
+  // Annotators may draw, move and reshape; everyone else only looks
   setEditable(editable: boolean) {
     this.editable = editable;
-    this.modify.setActive(editable);
-    this.translate.setActive(editable);
-    this.setTool(editable ? this.tool : 'SELECT');
+    this.applyTool();
   }
 
   setTool(tool: Tool) {
     this.tool = tool;
-    if (this.draw) this.map.removeInteraction(this.draw);
-    this.draw = null;
-    const drawing = tool !== 'SELECT' && this.editable;
-    this.select.setActive(!drawing);
-    if (!drawing) return;
+    this.applyTool();
+  }
 
-    this.setSelected(null);
-    this.draw =
-      tool === 'BBOX'
-        ? new Draw({ type: 'Circle', geometryFunction: createBox(), freehand: true }) // press, drag, release
-        : new Draw({ type: tool === 'POLYGON' ? 'Polygon' : 'Point' }); // polygon: click points, double-click to finish
-    this.draw.on('drawstart', () => (this.drawing = true));
-    this.draw.on('drawabort', () => (this.drawing = false));
-    this.draw.on('drawend', (event) => {
-      this.drawing = false;
-      void this.saveDrawing(tool as ShapeType, event.feature as Feature<ShapeGeom>);
-    });
-    this.map.addInteraction(this.draw);
+  // Brush size (image pixels) and whether strokes erase
+  setBrush(radius: number, erase: boolean) {
+    this.brushRadius = radius;
+    this.brushErase = erase;
+    this.brushSource.changed();
   }
 
   // Escape and Backspace while drawing. They return false when nothing was being drawn.
@@ -213,6 +254,65 @@ export class AnnotationMap {
     this.map.setTarget(undefined);
   }
 
+  private activeTool(): Tool {
+    return this.editable ? this.tool : 'SELECT';
+  }
+
+  // Turns the interactions of the chosen tool on, and the others off
+  private applyTool() {
+    for (const interaction of [this.draw, this.brush]) if (interaction) this.map.removeInteraction(interaction);
+    this.draw = null;
+    this.brush = null;
+    this.drawing = false;
+    this.brushSource.clear();
+
+    const tool = this.activeTool();
+    const editing = this.editable && tool === 'SELECT';
+    this.modify.setActive(editing);
+    this.translate.setActive(editing);
+    this.rotate.setActive(editing);
+    this.select.setActive(tool === 'SELECT');
+    this.map.getViewport().style.cursor = tool === 'SELECT' ? '' : 'crosshair';
+    this.shapeLayer.changed(); // corner handles and the turning knob only show while editing
+
+    if (tool === 'BBOX' || tool === 'OBB' || tool === 'POLYGON') {
+      this.setSelected(null);
+      const draw = this.createDraw(tool);
+      draw.on('drawstart', () => (this.drawing = true));
+      draw.on('drawabort', () => (this.drawing = false));
+      draw.on('drawend', (event) => {
+        this.drawing = false;
+        void this.saveDrawing(tool, event.feature as Feature<Polygon>);
+      });
+      this.draw = draw;
+      this.addBelowPan(draw);
+    }
+    if (tool === 'BRUSH') {
+      // The selected polygon stays selected: strokes are added to it (or erased from it)
+      this.brush = new BrushInteraction({
+        source: this.brushSource,
+        radius: () => this.brushRadius,
+        erase: () => this.brushErase,
+        onStroke: (points, radius, erase) => this.callbacks.onBrush(points.map(toPixel), radius, erase),
+      });
+      this.addBelowPan(this.brush);
+    }
+  }
+
+  private createDraw(tool: DrawTool) {
+    // Left button only: the middle one pans
+    const common = { style: sketchStyle, condition: noModifierKeysLeftButton };
+    if (tool === 'BBOX') return new Draw({ ...common, type: 'Circle', geometryFunction: createBox(), freehand: true }); // press, drag, release
+    if (tool === 'OBB') return new Draw({ ...common, type: 'LineString', maxPoints: 3, geometryFunction: rotatedBoxFromClicks }); // 3 clicks
+    return new Draw({ ...common, type: 'Polygon' }); // click points, double-click to finish
+  }
+
+  // Keeps the middle-button pan the last interaction, so it always goes first
+  private addBelowPan(interaction: Interaction) {
+    const interactions = this.map.getInteractions();
+    interactions.insertAt(interactions.getArray().indexOf(this.middlePan), interaction);
+  }
+
   private setSelected(labelId: string | null) {
     this.selectedId = labelId;
     const selected = this.select.getFeatures();
@@ -226,7 +326,7 @@ export class AnnotationMap {
     for (const feature of features) this.before.set(feature.getId() as string, feature.getGeometry()!.clone() as ShapeGeom);
   }
 
-  private async saveDrawing(shapeType: ShapeType, feature: Feature<ShapeGeom>) {
+  private async saveDrawing(shapeType: DrawTool, feature: Feature<Polygon>) {
     const geometry = toShapeGeometry(feature.getGeometry()!);
     if (isTiny(geometry)) return;
     this.pending.addFeature(feature); // shown dashed until the server answers
@@ -234,14 +334,33 @@ export class AnnotationMap {
     if (!saved) this.pending.clear();
   }
 
-  private async saveChange(feature: Feature<ShapeGeom>) {
+  private async useWand(coordinate: Coordinate) {
+    const marker = new Feature(new Point(coordinate)); // a ring where the magic pen is looking
+    this.pending.addFeature(marker);
+    const [minX, minY, maxX, maxY] = this.map.getView().calculateExtent(this.map.getSize());
+    try {
+      await this.callbacks.onWand(toPixel(coordinate), [minX, -maxY, maxX, -minY]);
+    } finally {
+      if (this.pending.hasFeature(marker)) this.pending.removeFeature(marker);
+    }
+  }
+
+  private async saveChange(feature: Feature<ShapeGeom>, kind: ChangeKind) {
     const id = feature.getId() as string;
     const label = this.labels.get(id);
     const before = this.before.get(id);
     if (!label || !before) return;
-    if (label.shapeType === 'BBOX') feature.setGeometry(straightenBox(before as Polygon, feature.getGeometry() as Polygon));
+    // Dragging one corner bends a box: make it a rectangle again
+    if (kind === 'reshape' && label.shapeType === 'BBOX') {
+      feature.setGeometry(straightenBox(before as Polygon, feature.getGeometry() as Polygon));
+    }
+    if (kind === 'reshape' && label.shapeType === 'OBB') {
+      feature.setGeometry(straightenRotatedBox(before as Polygon, feature.getGeometry() as Polygon));
+    }
 
     const saved = await this.callbacks.onChanged(id, toShapeGeometry(feature.getGeometry()!));
     if (!saved) feature.setGeometry(toOlGeometry(label.geometry)); // put it back
   }
 }
+
+const noModifierKeysLeftButton = (event: Parameters<typeof primaryAction>[0]) => noModifierKeys(event) && primaryAction(event);

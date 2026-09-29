@@ -1,9 +1,13 @@
 import { api } from './client';
 import type { MyTask, Task, TaskDetail } from '../types/task';
-import type { Label, ShapeGeometry, ShapeType } from '../types/label';
+import type { Label, PolygonGeometry, Position, ShapeGeometry, ShapeType } from '../types/label';
 import type { TaskInput } from './projects';
 
 export type NewLabel = { labelClassId: string; shapeType: ShapeType; geometry: ShapeGeometry };
+export type MagicWandInput = { x: number; y: number; tolerance: number; view: [number, number, number, number] };
+export type BrushInput = { stroke: Position[]; radius: number; erase: boolean; base?: PolygonGeometry };
+// What a brush stroke does: a new shape, a changed or deleted selected shape, or nothing
+export type BrushResult = { action: 'create' | 'update'; geometry: PolygonGeometry } | { action: 'delete' | 'none'; geometry?: undefined };
 
 // /api/tasks: one task, its workflow, and the shapes on its images
 export const tasksApi = {
@@ -46,6 +50,17 @@ export const tasksApi = {
     const { data } = await api.post<{ label: Label }>(`/tasks/${id}/images/${imageId}/labels`, input);
     return data.label;
   },
+
+  // Segmentation helpers: they return a polygon, which is then saved like a drawn one
+  async magicWand(id: string, imageId: string, input: MagicWandInput) {
+    const { data } = await api.post<{ geometry: PolygonGeometry }>(`/tasks/${id}/images/${imageId}/magic-wand`, input);
+    return data.geometry;
+  },
+  async brush(id: string, imageId: string, input: BrushInput) {
+    const { data } = await api.post<BrushResult>(`/tasks/${id}/images/${imageId}/brush`, input);
+    return data;
+  },
+
   async approveAll(id: string, imageId: string) {
     const { data } = await api.post<{ approved: number }>(`/tasks/${id}/images/${imageId}/labels/approve-all`);
     return data.approved;

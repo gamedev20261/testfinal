@@ -9,14 +9,17 @@ import type { Position, ShapeGeometry } from '../../../types/label';
 const flip = ([x, y]: Coordinate): Position => [x, -y];
 const round = ([x, y]: Position): Position => [Math.round(x * 100) / 100, Math.round(y * 100) / 100];
 
+// A map coordinate as an image pixel position
+export const toPixel = (coordinate: Coordinate): Position => round(flip(coordinate));
+
 export function toOlGeometry(geometry: ShapeGeometry) {
   if (geometry.type === 'Point') return new Point(flip(geometry.coordinates));
   return new Polygon(geometry.coordinates.map((ring) => ring.map(flip)));
 }
 
 export function toShapeGeometry(geometry: Point | Polygon): ShapeGeometry {
-  if (geometry instanceof Point) return { type: 'Point', coordinates: round(flip(geometry.getCoordinates())) };
-  return { type: 'Polygon', coordinates: geometry.getCoordinates().map((ring) => ring.map((c) => round(flip(c)))) };
+  if (geometry instanceof Point) return { type: 'Point', coordinates: toPixel(geometry.getCoordinates()) };
+  return { type: 'Polygon', coordinates: geometry.getCoordinates().map((ring) => ring.map(toPixel)) };
 }
 
 // OpenLayers lets you drag one corner of a box, which bends it.
@@ -29,6 +32,6 @@ export function straightenBox(before: Polygon, after: Polygon): Polygon {
   return fromExtent(boundingExtent([now[moved], old[(moved + 2) % 4]]));
 }
 
-// Area in pixels², to ignore accidental clicks with the box tool
+// Area in pixels², to ignore accidental clicks with the box tools
 export const isTiny = (geometry: ShapeGeometry) =>
   geometry.type === 'Polygon' && new Polygon(geometry.coordinates).getArea() < 4;

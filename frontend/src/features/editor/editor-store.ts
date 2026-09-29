@@ -11,12 +11,18 @@ type EditorState = {
   activeClassId: string | null; // class for new shapes
   selectedId: string | null; // selected shape
   showNames: boolean;
+  brushRadius: number; // image pixels
+  brushErase: boolean;
+  wandTolerance: number; // 1-128: how different a colour may be and still belong to the object
   undoStack: HistoryStep[];
   redoStack: HistoryStep[];
   setTool: (tool: Tool) => void;
   setActiveClass: (id: string | null) => void;
   select: (id: string | null) => void;
   toggleNames: () => void;
+  setShowNames: (show: boolean) => void;
+  setBrush: (changes: Partial<Pick<EditorState, 'brushRadius' | 'brushErase'>>) => void;
+  setWandTolerance: (tolerance: number) => void;
   record: (step: HistoryStep) => void;
   undo: () => Promise<void>;
   redo: () => Promise<void>;
@@ -29,12 +35,18 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   activeClassId: null,
   selectedId: null,
   showNames: false,
+  brushRadius: 12,
+  brushErase: false,
+  wandTolerance: 32,
   undoStack: [],
   redoStack: [],
   setTool: (tool) => set({ tool }),
   setActiveClass: (activeClassId) => set({ activeClassId }),
   select: (selectedId) => set({ selectedId }),
   toggleNames: () => set({ showNames: !get().showNames }),
+  setShowNames: (showNames) => set({ showNames }),
+  setBrush: (changes) => set(changes),
+  setWandTolerance: (wandTolerance) => set({ wandTolerance }),
   record: (step) => set({ undoStack: [...get().undoStack.slice(-49), step], redoStack: [] }),
 
   undo: async () => {

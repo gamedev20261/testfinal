@@ -1,76 +1,143 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Download } from 'lucide-react';
-import { projectsApi, type ExportOptions } from '../../api/projects';
+import { projectsApi, type ExportFormat, type ExportOptions } from '../../api/projects';
 import { Dialog, DialogFooter } from '../../components/ui/Dialog';
 import { Button } from '../../components/ui/Button';
-import { Select } from '../../components/ui/Select';
-import { FormField } from '../../components/ui/FormField';
+import { Input } from '../../components/ui/Input';
 import { cn } from '../../lib/cn';
-import type { Project } from '../../types/project';
+import type { Project, ProjectType } from '../../types/project';
 
-const FORMATS = [
-  { value: 'YOLO', title: 'YOLO', hint: 'labels/*.txt + data.yaml' },
-  { value: 'COCO', title: 'COCO', hint: 'one annotations.json' },
-  { value: 'GEOJSON', title: 'GeoJSON', hint: 'map coordinates, for GIS' },
-] as const;
+const FORMATS: Record<ProjectType, { value: ExportFormat; title: string; hint: string }[]> = {
+  DETECTION: [
+    { value: 'YOLO', title: 'YOLO', hint: 'boxes: class cx cy w h' },
+    { value: 'YOLO_OBB', title: 'YOLO OBB', hint: 'rotated boxes: 4 corners' },
+    { value: 'COCO', title: 'COCO', hint: 'one annotations.json' },
+    { value: 'GEOJSON', title: 'GeoJSON', hint: 'map coordinates, for GIS' },
+  ],
+  SEGMENTATION: [
+    { value: 'MASKS', title: 'Masks', hint: 'PNG masks per chip' },
+    { value: 'YOLO', title: 'YOLO-seg', hint: 'polygons in labels/*.txt' },
+    { value: 'COCO', title: 'COCO', hint: 'one annotations.json' },
+    { value: 'GEOJSON', title: 'GeoJSON', hint: 'map coordinates, for GIS' },
+  ],
+};
 
-// Choose a format and download the project's shapes as a .zip
+const CHIP_PRESETS = [256, 512, 640, 1024];
+const [MIN_CHIP, MAX_CHIP] = [64, 10_000];
+type ChipChoice = 'WHOLE' | 'CUSTOM' | number;
+
+// Choose a format and a chip size, then download the passed tasks' shapes as a .zip
 export function ExportDialog({ project, onClose }: { project: Project; onClose: () => void }) {
-  const [options, setOptions] = useState<ExportOptions>({ format: 'YOLO', tasks: 'PASSED', chipSize: 0, includeImages: true });
-  const set = (changes: Partial<ExportOptions>) => setOptions({ ...options, ...changes });
+  const formats = FORMATS[project.type];
+  const [format, setFormat] = useState<ExportFormat>(formats[0].value);
+  const [chip, setChip] = useState<ChipChoice | null>(null); // the admin must choose one
+  const [customSize, setCustomSize] = useState('');
+  const [includeImages, setIncludeImages] = useState(true);
+  const [mergeClasses, setMergeClasses] = useState(false);
   const summary = useQuery({
-    queryKey: ['project', project.id, 'export', options.tasks],
-    queryFn: () => projectsApi.exportSummary(project.id, options.tasks),
+    queryKey: ['project', project.id, 'export'],
+    queryFn: () => projectsApi.exportSummary(project.id),
   });
+
+  const usesChips = format !== 'GEOJSON';
+  const custom = Number(customSize);
+  const customError =
+    chip === 'CUSTOM' && customSize !== '' && !(Number.isInteger(custom) && custom >= MIN_CHIP && custom <= MAX_CHIP)
+      ? `A whole number from ${MIN_CHIP} to ${MAX_CHIP}`
+      : undefined;
+  const chipSize = chip === 'WHOLE' ? 0 : chip === 'CUSTOM' ? custom : (chip ?? 0);
+  const chipReady = !usesChips || (chip !== null && (chip !== 'CUSTOM' || (customSize !== '' && !customError)));
+  const nothingPassed = summary.data?.passedTaskCount === 0;
   const empty = summary.data?.imageCount === 0;
+  const canDownload = !!summary.data && !nothingPassed && !empty && chipReady;
+  const options: ExportOptions = { format, chipSize: usesChips ? chipSize : 0, includeImages, mergeClasses };
 
   return (
     <Dialog open onClose={onClose} title="Export dataset" description={project.name} wide>
       <div className="space-y-4">
-        <div className="grid grid-cols-3 gap-2">
-          {FORMATS.map((format) => (
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {formats.map((option) => (
             <button
-              key={format.value}
+              key={option.value}
               type="button"
-              onClick={() => set({ format: format.value })}
-              className={cn('rounded-lg border p-3 text-left', options.format === format.value ? 'border-primary bg-primary-light' : 'border-border hover:border-primary/50')}
+              onClick={() => setFormat(option.value)}
+              className={cn('rounded-lg border p-3 text-left', format === option.value ? 'border-primary bg-primary-light' : 'border-border hover:border-primary/50')}
             >
-              <span className="block text-sm font-semibold">{format.title}</span>
-              <span className="text-[11px] text-text-secondary">{format.hint}</span>
+              <span className="block text-sm font-semibold">{option.title}</span>
+              <span className="text-[11px] text-text-secondary">{option.hint}</span>
             </button>
           ))}
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <FormField label="Which tasks" htmlFor="export-tasks">
-            <Select id="export-tasks" value={options.tasks} onChange={(e) => set({ tasks: e.target.value as ExportOptions['tasks'] })}>
-              <option value="PASSED">Passed review only</option>
-              <option value="ALL">All tasks (not rejected shapes)</option>
-            </Select>
-          </FormField>
-          {options.format !== 'GEOJSON' && (
-            <FormField label="Cut images into chips" htmlFor="export-chips">
-              <Select id="export-chips" value={options.chipSize} onChange={(e) => set({ chipSize: Number(e.target.value) })}>
-                <option value={0}>No, whole images</option>
-                {[256, 512, 640, 1024].map((size) => (
-                  <option key={size} value={size}>{size} × {size} px</option>
-                ))}
-              </Select>
-            </FormField>
-          )}
-        </div>
+        {usesChips && (
+          <div>
+            <p className="mb-1 text-xs font-medium text-text-secondary">Chip size * <span className="font-normal">(images are cut into squares of this size)</span></p>
+            <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Chip size">
+              {(['WHOLE', ...CHIP_PRESETS, 'CUSTOM'] as ChipChoice[]).map((choice) => (
+                <button
+                  key={choice}
+                  type="button"
+                  role="radio"
+                  aria-checked={chip === choice}
+                  onClick={() => setChip(choice)}
+                  className={cn('rounded-lg border px-3 py-1.5 text-xs font-medium', chip === choice ? 'border-primary bg-primary-light text-primary' : 'border-border hover:border-primary/50')}
+                >
+                  {choice === 'WHOLE' ? 'Whole images' : choice === 'CUSTOM' ? 'Custom…' : `${choice} px`}
+                </button>
+              ))}
+            </div>
+            {chip === 'CUSTOM' && (
+              <div className="mt-2 flex items-center gap-2">
+                <Input
+                  type="number"
+                  min={MIN_CHIP}
+                  max={MAX_CHIP}
+                  step={1}
+                  value={customSize}
+                  onChange={(e) => setCustomSize(e.target.value)}
+                  placeholder="e.g. 800"
+                  aria-label="Custom chip size in pixels"
+                  aria-invalid={!!customError}
+                  className="w-32 py-1.5"
+                  autoFocus
+                />
+                <span className="text-xs text-text-secondary">× the same, in pixels</span>
+                {customError && <span role="alert" className="text-xs text-danger">{customError}</span>}
+              </div>
+            )}
+            {chip === null && <p className="mt-1 text-[11px] text-text-secondary">Choose a chip size to download.</p>}
+          </div>
+        )}
+
+        {format === 'MASKS' && (
+          <div className="rounded-lg border border-border p-3">
+            <label className="flex items-center gap-2 text-sm font-medium">
+              <input type="checkbox" checked={mergeClasses} onChange={(e) => setMergeClasses(e.target.checked)} />
+              Merge all classes into one mask
+            </label>
+            <p className="mt-1 pl-6 text-[11px] text-text-secondary">
+              {mergeClasses
+                ? 'One folder masks/: one mask per chip, black background, each class painted in its own colour (listed in classes.json).'
+                : 'One folder per class, masks/<class>/: a black-and-white mask per chip, the class white and everything else black.'}
+            </p>
+          </div>
+        )}
 
         <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={options.includeImages} onChange={(e) => set({ includeImages: e.target.checked })} />
-          Include the images {options.format === 'GEOJSON' ? '(original files)' : '(JPEG)'}
+          <input type="checkbox" checked={includeImages} onChange={(e) => setIncludeImages(e.target.checked)} />
+          Include the images {format === 'GEOJSON' ? '(original files)' : '(JPEG chips)'}
         </label>
 
-        <div className="rounded-lg bg-surface-alt p-3 text-xs text-text-secondary">
-          {summary.isPending ? 'Counting…' : empty ? 'Nothing to export yet: no ready images in these tasks.' : (
-            <>This export has <strong>{summary.data?.imageCount}</strong> image(s) and <strong>{summary.data?.labelCount}</strong> shape(s).
-              {options.format === 'YOLO' && ' Points are not part of YOLO and are left out.'}
-              {options.chipSize > 0 && ' Only chips that contain shapes are included.'}</>
+        <div className={cn('rounded-lg p-3 text-xs', nothingPassed ? 'bg-amber-50 text-amber-800' : 'bg-surface-alt text-text-secondary')}>
+          {summary.isPending ? 'Counting…' : nothingPassed ? (
+            <>No task has passed review yet. Only tasks that passed review can be exported.</>
+          ) : empty ? (
+            'Nothing to export: the passed tasks have no ready images.'
+          ) : (
+            <>Only tasks that passed review are exported: <strong>{summary.data?.passedTaskCount}</strong> task(s),{' '}
+              <strong>{summary.data?.imageCount}</strong> image(s), <strong>{summary.data?.labelCount}</strong> shape(s).
+              {usesChips && chip !== null && chip !== 'WHOLE' && ' Only chips that contain shapes are included.'}</>
           )}
         </div>
       </div>
@@ -79,9 +146,9 @@ export function ExportDialog({ project, onClose }: { project: Project; onClose: 
         <Button variant="secondary" onClick={onClose}>Close</Button>
         {/* A normal link: the browser downloads the zip itself, even a big one */}
         <a
-          href={projectsApi.exportUrl(project.id, options)}
-          aria-disabled={empty}
-          className={cn('inline-flex items-center gap-1.5 rounded bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-dark', empty && 'pointer-events-none opacity-50')}
+          href={canDownload ? projectsApi.exportUrl(project.id, options) : undefined}
+          aria-disabled={!canDownload}
+          className={cn('inline-flex items-center gap-1.5 rounded bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-dark', !canDownload && 'pointer-events-none opacity-50')}
         >
           <Download size={14} /> Download .zip
         </a>

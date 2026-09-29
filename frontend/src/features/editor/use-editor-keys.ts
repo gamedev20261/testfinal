@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { Tool } from './map/annotation-map';
+import { TOOL_INFO } from './editor-mode';
 
 type Handlers = {
   tools: Tool[];
@@ -15,8 +16,6 @@ type Handlers = {
   onReject: () => void;
   onToggleNames: () => void;
 };
-
-const TOOL_KEYS: Record<string, Tool> = { v: 'SELECT', b: 'BBOX', p: 'POLYGON', o: 'POINT' };
 
 // Keyboard shortcuts of the editor (ignored while typing in a text field)
 export function useEditorKeys(handlers: Handlers) {
@@ -35,7 +34,9 @@ export function useEditorKeys(handlers: Handlers) {
       if (ctrl && key === 'z') return run(event, event.shiftKey ? h.onRedo : h.onUndo);
       if (ctrl && key === 'y') return run(event, h.onRedo);
       if (ctrl) return;
-      if (TOOL_KEYS[key] && h.tools.includes(TOOL_KEYS[key])) return run(event, () => h.onTool(TOOL_KEYS[key]));
+      // B is the box in detection projects and the brush in segmentation ones
+      const tool = h.tools.find((t) => TOOL_INFO[t].key.toLowerCase() === key);
+      if (tool) return run(event, () => h.onTool(tool));
       if (/^[1-9]$/.test(key)) return run(event, () => h.onClassKey(Number(key) - 1));
       if (key === 'delete') return run(event, h.onDelete);
       if (key === 'backspace') return run(event, () => h.onBackspace() || h.onDelete());

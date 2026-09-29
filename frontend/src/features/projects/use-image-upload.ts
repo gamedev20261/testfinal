@@ -5,7 +5,9 @@ import { projectsApi } from '../../api/projects';
 import { apiErrorMessage } from '../../api/client';
 import { projectKey } from './queries';
 
-export const IMAGE_TYPES = '.tif,.tiff,.jpg,.jpeg,.png';
+// Only TIFF / GeoTIFF images can be uploaded
+export const IMAGE_TYPES = '.tif,.tiff';
+const isTiff = (file: File) => /\.tiff?$/i.test(file.name);
 
 // Opens the file picker, uploads the chosen images and tracks the progress (0-100)
 export function useImageUpload(projectId: string) {
@@ -13,7 +15,10 @@ export function useImageUpload(projectId: string) {
   const [progress, setProgress] = useState<number | null>(null);
   const queryClient = useQueryClient();
 
-  async function upload(files: File[]) {
+  async function upload(chosen: File[]) {
+    const refused = chosen.filter((file) => !isTiff(file));
+    if (refused.length > 0) toast.error(`Only TIFF images (.tif, .tiff) can be uploaded. Skipped: ${refused.map((f) => f.name).join(', ')}`);
+    const files = chosen.filter(isTiff);
     if (files.length === 0) return;
     setProgress(0);
     try {

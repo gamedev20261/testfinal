@@ -15,8 +15,8 @@ import { useLabelClasses } from '../admin/queries';
 import { projectsKey } from './queries';
 
 const TYPES: { value: ProjectType; title: string; hint: string }[] = [
-  { value: 'DETECTION', title: 'Object Detection', hint: 'Boxes and points' },
-  { value: 'SEGMENTATION', title: 'Segmentation', hint: 'Polygons, boxes and points' },
+  { value: 'DETECTION', title: 'Object Detection', hint: 'Boxes and rotated boxes' },
+  { value: 'SEGMENTATION', title: 'Segmentation', hint: 'Polygons: drawn, magic pen or brush' },
 ];
 
 export function CreateProjectDialog({ open, onClose }: { open: boolean; onClose: () => void }) {

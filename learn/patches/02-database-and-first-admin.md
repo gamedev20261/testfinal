@@ -77,10 +77,9 @@ npm run db:seed               # 5. creates the admin: "Created admin admin@examp
 npm run dev                   # 6. start the API
 ```
 
-> **No Docker?** Install PostgreSQL 16 from https://www.postgresql.org/download/, then in
-> its `psql` shell run:
-> `CREATE ROLE geo WITH LOGIN CREATEDB PASSWORD 'geo_dev_password';` and
-> `CREATE DATABASE geoannotator OWNER geo;`. Everything else stays the same.
+> **No Docker? PostgreSQL installed with pgAdmin?** Skip step 1 and follow
+> [local-postgres.md](../local-postgres.md): you only change the `DATABASE_URL` line in
+> `backend/.env`, then run steps 3–6.
 
 ## Test it
 

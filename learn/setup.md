@@ -6,7 +6,7 @@ You need five tools. Install them in this order, then run the checks at the bott
 |---|---|---|
 | **Git** | Downloads the code and moves between patches | https://git-scm.com/downloads |
 | **Node.js 22 (LTS)** | Runs JavaScript/TypeScript outside the browser: our backend, and the tools that build the frontend. Comes with **npm**, the package installer. | https://nodejs.org (choose version 22 LTS) |
-| **Docker Desktop** | Runs PostgreSQL (our database) in a container, so you don't have to install a database server yourself. Needed from patch 02. | https://www.docker.com/products/docker-desktop |
+| **Docker Desktop** *or* **PostgreSQL** | The database, from patch 02. Either Docker runs PostgreSQL in a container for you, **or** you install PostgreSQL (with pgAdmin) directly: then follow [local-postgres.md](local-postgres.md). | https://www.docker.com/products/docker-desktop · https://www.postgresql.org/download/ |
 | **VS Code** | Code editor | https://code.visualstudio.com |
 | **Postman** | Sends requests to the API so you can see exactly what it returns | https://www.postman.com/downloads |
 
@@ -33,7 +33,7 @@ Open a new terminal (so it sees the new programs) and run:
 git --version        # git version 2.x
 node -v              # v22.x.x
 npm -v               # 10.x
-docker --version     # Docker version 2x.x (from patch 02)
+docker --version     # Docker version 2x.x (only if you use Docker for the database)
 ```
 
 If a command says "not found", close and reopen the terminal. If it still fails,

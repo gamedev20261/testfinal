@@ -8,6 +8,7 @@ learn/
 ├── README.md        ← you are here
 ├── setup.md         ← install the tools (do this once)
 ├── postman.md       ← how to use Postman with this project
+├── local-postgres.md ← database installed on your computer (pgAdmin) instead of Docker
 ├── concepts/        ← general web knowledge, explained from zero
 ├── patches/         ← one guide per patch: what it adds, reading order, how to run and test it
 └── files/           ← one explanation per code file, at the SAME path as the code

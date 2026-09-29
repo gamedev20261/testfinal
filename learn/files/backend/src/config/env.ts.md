@@ -1,6 +1,6 @@
 # `backend/src/config/env.ts`
 
-> Added in **patch 01** · Changed in **patch 02** (`DATABASE_URL`), **patch 03** (`JWT_SECRET`, `SESSION_HOURS`) · [View the code](../../../../../backend/src/config/env.ts)
+> Added in **patch 01** · Changed in **patch 02** (`DATABASE_URL`), **patch 03** (`JWT_SECRET`, `SESSION_HOURS`), after **patch 06** (missing-file hint) · [View the code](../../../../../backend/src/config/env.ts)
 
 ## What it is for
 
@@ -17,10 +17,11 @@ start *with a clear message*, instead of failing mysteriously an hour later.
 ### 1. Load the `.env` file
 
 ```ts
+let envFileFound = true;
 try {
   process.loadEnvFile();
 } catch {
-  // no .env file
+  envFileFound = false;
 }
 ```
 
@@ -30,7 +31,8 @@ current folder and copies each `NAME=value` line into `process.env`.
 
 `try { … } catch { … }` means: *try this; if it throws an error, run the catch block
 instead of crashing*. On a real server there is often no `.env` file (variables are set by
-the hosting system), and that is fine.
+the hosting system), and that is fine. We remember whether the file was found
+(`envFileFound`) to give a better hint below.
 
 > A variable that already exists (set in the terminal, e.g. `PORT=4000 npm run dev`)
 > is **not** overwritten by the file. That lets you override a setting for one run.
@@ -68,7 +70,8 @@ We will use Zod the same way to check what users send to the API.
 const result = envSchema.safeParse(process.env);
 
 if (!result.success) {
-  console.error('Invalid settings in backend/.env:\n' + z.prettifyError(result.error));
+  const hint = envFileFound ? '' : '\n\nbackend/.env was not found. Copy backend/.env.example to backend/.env and edit it.';
+  console.error('Invalid settings in backend/.env:\n' + z.prettifyError(result.error) + hint);
   process.exit(1);
 }
 ```
@@ -76,6 +79,10 @@ if (!result.success) {
 `safeParse` never throws; it returns either `{ success: true, data }` or
 `{ success: false, error }`. On failure we print a readable list of the problems and stop
 the program. `process.exit(1)`: exit code `1` means "ended with an error".
+
+If the file itself was missing, the message ends with
+*backend/.env was not found. Copy backend/.env.example to backend/.env and edit it.*,
+the most common reason for missing settings after cloning the project.
 
 Try it: `PORT=abc npm run dev` prints
 

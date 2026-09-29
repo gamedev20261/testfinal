@@ -1,6 +1,6 @@
 # `backend/src/server.ts`
 
-> Added in **patch 01** · [View the code](../../../../backend/src/server.ts)
+> Added in **patch 01** · Changed after **patch 06** (database check) · [View the code](../../../../backend/src/server.ts)
 
 ## What it is for
 
@@ -14,6 +14,7 @@ const app = createApp();
 
 app.listen(env.PORT, () => {
   logger.info(`API ready on http://localhost:${env.PORT}`);
+  void checkDatabaseConnection();
 });
 ```
 
@@ -21,6 +22,11 @@ app.listen(env.PORT, () => {
 - `app.listen(port, callback)` asks the operating system for the port (3001) and starts
   waiting for connections. The **callback** (the arrow function) runs once the port is
   open, so "API ready" means the server can really accept requests.
+
+- `checkDatabaseConnection()` (added after patch 06) asks the database one quick question
+  and prints either `Database connected: postgres@localhost:5432/geoannotator` or exactly
+  what's wrong ([explained here](lib/database-check.ts.md)). `void` means "start it, but
+  don't wait for it": the server is already accepting requests meanwhile.
 
 From now on the program does not exit: it waits for requests until you press `Ctrl+C`.
 

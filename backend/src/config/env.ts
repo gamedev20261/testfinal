@@ -1,11 +1,12 @@
 import { z } from 'zod';
 
-// Load backend/.env into process.env. A missing file is fine:
+// Load backend/.env into process.env. A missing file is allowed:
 // on a real server the variables are set by the hosting system instead.
+let envFileFound = true;
 try {
   process.loadEnvFile();
 } catch {
-  // no .env file
+  envFileFound = false;
 }
 
 // Every setting the backend needs, with its type and default value
@@ -22,7 +23,8 @@ const result = envSchema.safeParse(process.env);
 
 // Stop at startup with a clear message, instead of failing later in a strange way
 if (!result.success) {
-  console.error('Invalid settings in backend/.env:\n' + z.prettifyError(result.error));
+  const hint = envFileFound ? '' : '\n\nbackend/.env was not found. Copy backend/.env.example to backend/.env and edit it.';
+  console.error('Invalid settings in backend/.env:\n' + z.prettifyError(result.error) + hint);
   process.exit(1);
 }
 

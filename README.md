@@ -13,8 +13,9 @@ The original app (`gamedev20261/test2`) is only a reference and is never modifie
 ## Run it
 
 ```bash
-# 1. Database (PostgreSQL in Docker)
+# 1. Database: PostgreSQL in Docker…
 docker compose up -d
+#    …or PostgreSQL installed with pgAdmin: see learn/local-postgres.md
 
 # 2. Backend: http://localhost:3001
 cd backend

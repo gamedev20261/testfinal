@@ -1,0 +1,1 @@
+ALTER TYPE "public"."shape_type" ADD VALUE 'OBB';

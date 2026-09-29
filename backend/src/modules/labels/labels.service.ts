@@ -4,7 +4,7 @@ import { labels, taskImages, images, projects, projectLabelClasses, labelClasses
 import { HttpError } from '../../lib/http-error';
 import { findTaskForUser, assertCanEditLabels, assertCanReview } from '../../permissions/access';
 import type { PublicUser } from '../auth/auth.service';
-import { cleanShape, assertNotNested } from './geometry';
+import { cleanShape, assertNotNested, SHAPE_NAME } from './geometry';
 import type { CreateLabelInput, UpdateLabelInput, ReviewLabelInput } from './labels.schemas';
 
 const labelColumns = {
@@ -19,10 +19,11 @@ const labelColumns = {
   updatedAt: labels.updatedAt,
 };
 
-// Which shapes each project type draws
+// Which shapes each project type draws. Segmentation only has polygons
+// (the magic pen and the brush make polygons too).
 const ALLOWED_SHAPES = {
-  DETECTION: ['BBOX', 'POINT'],
-  SEGMENTATION: ['POLYGON', 'BBOX', 'POINT'],
+  DETECTION: { types: ['BBOX', 'OBB'], names: 'boxes and rotated boxes' },
+  SEGMENTATION: { types: ['POLYGON'], names: 'polygons' },
 } as const;
 
 export function listLabels(taskId: string, imageId: string) {
@@ -39,7 +40,7 @@ async function findLabelRow(labelId: string) {
 }
 
 // The image, if it belongs to the task and is ready to draw on
-async function findTaskImage(taskId: string, imageId: string) {
+export async function findTaskImage(taskId: string, imageId: string) {
   const [image] = await db
     .select({ width: images.width, height: images.height, status: images.status })
     .from(taskImages)
@@ -69,9 +70,9 @@ async function assertClassAllowed(task: Task, labelClassId: string) {
 
 async function assertShapeAllowed(task: Task, shapeType: CreateLabelInput['shapeType']) {
   const project = await db.query.projects.findFirst({ where: eq(projects.id, task.projectId), columns: { type: true } });
-  const allowed: readonly string[] = ALLOWED_SHAPES[project!.type];
-  if (!allowed.includes(shapeType)) {
-    throw new HttpError(400, `A ${project!.type.toLowerCase()} project can't use ${shapeType.toLowerCase()} shapes`);
+  const allowed = ALLOWED_SHAPES[project!.type];
+  if (!(allowed.types as readonly string[]).includes(shapeType)) {
+    throw new HttpError(400, `A ${project!.type.toLowerCase()} project only uses ${allowed.names}`);
   }
 }
 
@@ -117,6 +118,9 @@ export async function updateLabel(user: PublicUser, labelId: string, input: Upda
 
   let geometry;
   if (input.geometry) {
+    if ((label.shapeType === 'POINT') !== (input.geometry.type === 'Point')) {
+      throw new HttpError(400, `A ${SHAPE_NAME[label.shapeType]} can't become a ${input.geometry.type.toLowerCase()}`);
+    }
     const { width, height } = await findTaskImage(task.id, label.imageId);
     geometry = await cleanShape(label.shapeType, input.geometry, width, height);
     await assertNotNested({ taskId: task.id, imageId: label.imageId, shapeType: label.shapeType, geometry, exceptLabelId: labelId });

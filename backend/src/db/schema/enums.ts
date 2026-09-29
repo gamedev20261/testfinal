@@ -22,4 +22,5 @@ export const taskStatusEnum = pgEnum('task_status', [
 // The auditor's verdict on one label, or on one image of a task
 export const reviewStatusEnum = pgEnum('review_status', ['PENDING', 'APPROVED', 'REJECTED']);
 
-export const shapeTypeEnum = pgEnum('shape_type', ['BBOX', 'POLYGON', 'POINT']);
+// OBB = oriented (rotated) box. POINT can no longer be drawn; old points are still shown.
+export const shapeTypeEnum = pgEnum('shape_type', ['BBOX', 'POLYGON', 'POINT', 'OBB']);

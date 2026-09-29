@@ -8,6 +8,8 @@ import { listMyTasks, getTaskDetail, updateTask, deleteTask } from './tasks.serv
 import { startTask, submitTask, reviewTask, reviewImage, approvePendingLabels } from './workflow.service';
 import { listLabels, createLabel } from '../labels/labels.service';
 import { createLabelSchema } from '../labels/labels.schemas';
+import { magicWandSchema, brushSchema } from '../labels/tools.schemas';
+import { magicWand, brushStroke } from '../labels/tools.service';
 
 // Task lists and creation per project are in projects.routes.ts (/api/projects/:id/tasks)
 export const tasksRouter = Router();
@@ -76,4 +78,18 @@ tasksRouter.post('/:id/images/:imageId/labels/approve-all', async (req, res) => 
   assertCanReview(task, role);
   const approved = await approvePendingLabels(task.id, req.user!.id, idParam(req.params.imageId, 'Image'));
   res.json({ approved });
+});
+
+// ── Segmentation helpers: they return a polygon, the editor then saves it as a new or changed shape ──
+
+tasksRouter.post('/:id/images/:imageId/magic-wand', async (req, res) => {
+  const taskId = idParam(req.params.id, 'Task');
+  const imageId = idParam(req.params.imageId, 'Image');
+  res.json({ geometry: await magicWand(req.user!, taskId, imageId, magicWandSchema.parse(req.body)) });
+});
+
+tasksRouter.post('/:id/images/:imageId/brush', async (req, res) => {
+  const taskId = idParam(req.params.id, 'Task');
+  const imageId = idParam(req.params.imageId, 'Image');
+  res.json(await brushStroke(req.user!, taskId, imageId, brushSchema.parse(req.body)));
 });

@@ -1,11 +1,12 @@
 import path from 'node:path';
-import { rm } from 'node:fs/promises';
+import { open, rm } from 'node:fs/promises';
 import multer from 'multer';
 import { env } from '../../config/env';
 import { HttpError } from '../../lib/http-error';
 import { tmpDir } from '../../lib/storage';
 
-export const IMAGE_EXTENSIONS = ['.tif', '.tiff', '.jpg', '.jpeg', '.png'];
+// Only TIFF / GeoTIFF images can be uploaded
+export const IMAGE_EXTENSIONS = ['.tif', '.tiff'];
 
 // Receives the "files" field of a multipart form into uploads/tmp/
 export const uploadImages = multer({
@@ -16,9 +17,27 @@ export const uploadImages = multer({
     file.originalname = Buffer.from(file.originalname, 'latin1').toString('utf8');
     const ext = path.extname(file.originalname).toLowerCase();
     if (IMAGE_EXTENSIONS.includes(ext)) accept(null, true);
-    else accept(new HttpError(400, `${file.originalname}: only ${IMAGE_EXTENSIONS.join(', ')} files can be uploaded`));
+    else accept(new HttpError(400, `${file.originalname}: only TIFF images (${IMAGE_EXTENSIONS.join(', ')}) can be uploaded`));
   },
 }).array('files', 50);
+
+// TIFF files start with "II*\0" (little-endian), "MM\0*" (big-endian) or the BigTIFF variants
+const TIFF_HEADERS = ['49492a00', '4d4d002a', '49492b00', '4d4d002b'];
+
+// The name says .tif; the first bytes must agree (a renamed JPEG is refused)
+export async function assertTiffFiles(files: Express.Multer.File[]) {
+  for (const file of files) {
+    const handle = await open(file.path, 'r');
+    try {
+      const { buffer, bytesRead } = await handle.read(Buffer.alloc(4), 0, 4, 0);
+      if (bytesRead < 4 || !TIFF_HEADERS.includes(buffer.toString('hex'))) {
+        throw new HttpError(400, `${file.originalname} is not a TIFF image`);
+      }
+    } finally {
+      await handle.close();
+    }
+  }
+}
 
 export const uploadedFiles = (files: unknown) => (Array.isArray(files) ? (files as Express.Multer.File[]) : []);
 

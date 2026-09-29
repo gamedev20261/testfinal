@@ -16,24 +16,46 @@ function bounds(points: Position[]) {
   return { x: minX, y: minY, w: Math.max(...xs) - minX, h: Math.max(...ys) - minY };
 }
 
+// The smallest rectangle turned by `angle` (radians from the x axis) around the points, as 4 corners
+export function orientedCorners(points: Position[], angle: number): Position[] {
+  const [cos, sin] = [Math.cos(angle), Math.sin(angle)];
+  const us = points.map(([x, y]) => x * cos + y * sin); // along the box's first side
+  const vs = points.map(([x, y]) => -x * sin + y * cos); // across it
+  const [u0, u1, v0, v1] = [Math.min(...us), Math.max(...us), Math.min(...vs), Math.max(...vs)];
+  return [
+    [u0, v0],
+    [u1, v0],
+    [u1, v1],
+    [u0, v1],
+  ].map(([u, v]) => [u * cos - v * sin, u * sin + v * cos]);
+}
+
+// YOLO wants every number between 0 and 1 (rotated corners may stick out of the chip a little)
+const unit = (value: number) => round(Math.min(1, Math.max(0, value)));
+
+export type YoloMode = 'BOX' | 'OBB' | 'SEGMENT';
+
 // YOLO: one .txt per image, one line per shape, numbers relative to the image size (0-1)
-//   detection:    class centerX centerY width height
-//   segmentation: class x1 y1 x2 y2 x3 y3 ...
+//   BOX:     class centerX centerY width height          (rotated boxes become their envelope)
+//   OBB:     class x1 y1 x2 y2 x3 y3 x4 y4               (boxes become rotated boxes at angle 0)
+//   SEGMENT: class x1 y1 x2 y2 x3 y3 ...
 // Points have no YOLO form and are left out.
-export function yoloLines(chip: ExportChip, classIndex: Map<string, number>, segmentation: boolean) {
+export function yoloLines(chip: ExportChip, classIndex: Map<string, number>, mode: YoloMode) {
   const lines: string[] = [];
+  const xy = ([x, y]: Position) => [unit(x / chip.width), unit(y / chip.height)];
   for (const shape of chip.shapes) {
     if (shape.shapeType === 'POINT') continue;
     const points = ring(shape);
     const index = classIndex.get(shape.labelClassId);
     if (index === undefined) continue;
-    if (segmentation) {
-      const xy = points.flatMap(([x, y]) => [round(x / chip.width), round(y / chip.height)]);
-      lines.push([index, ...xy].join(' '));
+    if (mode === 'SEGMENT') {
+      lines.push([index, ...points.flatMap(xy)].join(' '));
+    } else if (mode === 'OBB') {
+      lines.push([index, ...orientedCorners(points, shape.angle).flatMap(xy)].join(' '));
     } else {
       const box = bounds(points);
-      const center = [round((box.x + box.w / 2) / chip.width), round((box.y + box.h / 2) / chip.height)];
-      lines.push([index, ...center, round(box.w / chip.width), round(box.h / chip.height)].join(' '));
+      const [cx, cy] = xy([box.x + box.w / 2, box.y + box.h / 2]);
+      lines.push([index, cx, cy, unit(box.w / chip.width), unit(box.h / chip.height)].join(' '));
     }
   }
   return lines.join('\n');
@@ -65,7 +87,8 @@ export function cocoJson(chips: ExportChip[], classes: ExportClass[]) {
         ...common,
         bbox: [box.x, box.y, box.w, box.h].map(round),
         area: round(polygonArea(points)),
-        segmentation: shape.shapeType === 'POLYGON' ? [points.flat().map(round)] : [],
+        // Polygons and rotated boxes (cut to the chip) keep their outline; boxes are just their bbox
+        segmentation: shape.shapeType === 'BBOX' ? [] : [points.flat().map(round)],
       });
     }
   });

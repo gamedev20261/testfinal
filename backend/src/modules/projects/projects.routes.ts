@@ -16,7 +16,7 @@ import {
 import { listMembers, addMembers, removeMember } from './members.service';
 import { getProjectStats } from './stats.service';
 import { listProjectImages, addUploadedImages } from '../images/images.service';
-import { uploadImages, uploadedFiles, removeTempFiles } from '../images/upload';
+import { uploadImages, uploadedFiles, removeTempFiles, assertTiffFiles } from '../images/upload';
 import { HttpError } from '../../lib/http-error';
 import { listProjectTasks, createTask } from '../tasks/tasks.service';
 import { createTaskSchema } from '../tasks/tasks.schemas';
@@ -92,12 +92,13 @@ projectsRouter.get('/:id/images', async (req, res) => {
   res.json({ images: await listProjectImages(project.id) });
 });
 
-// multipart/form-data with one or more "files"
+// multipart/form-data with one or more "files" (TIFF / GeoTIFF only)
 projectsRouter.post('/:id/images', admin, uploadImages, async (req, res) => {
   const files = uploadedFiles(req.files);
   try {
     const project = await findProjectForUser(req.user!, idParam(req.params.id, 'Project'));
-    if (files.length === 0) throw new HttpError(400, 'Choose at least one image file');
+    if (files.length === 0) throw new HttpError(400, 'Choose at least one TIFF image');
+    await assertTiffFiles(files);
     res.status(201).json({ images: await addUploadedImages(project.id, files, req.user!.id) });
   } finally {
     await removeTempFiles(files); // saved files were already moved away
@@ -123,11 +124,11 @@ projectsRouter.get('/:id/stats', async (req, res) => {
   res.json({ stats: await getProjectStats(project.id) });
 });
 
-// ── Export (a .zip download) ──
+// ── Export (a .zip download of the tasks that passed review) ──
 
 projectsRouter.get('/:id/export/summary', admin, async (req, res) => {
   const project = await findProjectForUser(req.user!, idParam(req.params.id, 'Project'));
-  res.json(await exportSummary(project.id, exportSchema.pick({ tasks: true }).parse(req.query)));
+  res.json(await exportSummary(project.id));
 });
 
 projectsRouter.get('/:id/export', admin, async (req, res) => {

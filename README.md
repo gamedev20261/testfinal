@@ -57,10 +57,16 @@ Set `SEED_DEMO_USERS=false` in `.env` to skip the demo accounts and classes.
 6. **Annotator** fixes the rejected shapes (moving or reshaping one sends it back to review) and submits again.
 7. **Admin** → *Export* (only tasks that **passed** review), cut into chips of a size the admin chooses
    (whole images, 256–1024 px, or any custom size from 64 to 10 000 px):
-   - *Object detection*: YOLO (boxes), YOLO OBB (rotated boxes, 4 corners), COCO, GeoJSON
-   - *Segmentation*: **Masks** (PNG, black background), YOLO-seg, COCO, GeoJSON.
-     With *Merge all classes* one mask per chip paints each class in its own colour (`masks/`, `classes.json`);
+   - *Object detection*: **YOLO OBB** (`images/`, `labels/*.txt` with the 4 corners, `data.yaml`) or
+     **Pascal VOC** (`JPEGImages/`, `Annotations/*.xml`, `ImageSets/Main/trainval.txt`).
+   - *Segmentation*: always **masks** (nothing to choose): `images/` plus black-background PNG masks.
+     With *Merge all classes* one mask per chip paints each class in its own colour (`masks/`);
      without it every class gets its own folder of black-and-white masks (`masks/<class>/`, the class white).
+   - Every export has a `classes.txt` with each class id and name.
+   - **Augmentation** (optional): 1–10 extra copies of every chip (`<name>_aug1.jpg`…). Each copy stacks the chosen
+     augmentations with random strengths; geometric ones move the masks and boxes with the image.
+     *Geometric*: flip left–right, flip top–bottom, rotate 90°/180°/270°, small rotation ±15°, zoom 5–30 %.
+     *Colour*: brightness, contrast, saturation, hue, blur, sharpen, noise, grayscale.
 
 ## Editor keyboard shortcuts
 
@@ -69,6 +75,8 @@ Set `SEED_DEMO_USERS=false` in `.env` to skip the demo accounts and classes.
 | `V` | Select / edit tool |
 | `B` / `O` | Detection: Box, Rotated box tool |
 | `P` / `M` / `B` | Segmentation: Polygon, Magic pen, Brush tool |
+| `X` / `J` | Segmentation: Cut, Merge tool |
+| Right-click (or `Alt`+click) a corner | Delete that corner of the selected polygon |
 | Middle mouse button (drag) | Move the image, with any tool |
 | `1`–`9` | Class for new shapes (or change the selected shape's class) |
 | `Delete` | Delete the selected shape |
@@ -89,6 +97,9 @@ Tools per project type: *object detection* draws **boxes** and **rotated boxes**
 - Magic pen: click an object; its outline is found by colour (*Tolerance* in the toolbar) and saved as a polygon.
 - Brush: paint an object (*Size* in the toolbar). The new shape stays selected, so the next strokes join it;
   `Shift` (or the eraser button) erases from it; `Esc` starts a new shape.
+- Cut: click points of a line across a polygon, double-click to finish; it is split in two (the selected polygon,
+  or every polygon the line crosses).
+- Merge: click a polygon, then click polygons that touch it; they join the first one and take its class.
 
 With the select tool: drag a corner to reshape, drag inside a shape to move it.
 Segmentation projects show each shape's class name on it (`L` hides them).
@@ -110,8 +121,9 @@ Segmentation projects show each shape's class name on it (`L` hides them).
   **Brush**: the stroke is widened with `ST_Buffer`, then joined to (`ST_Union`) or cut from (`ST_Difference`) the selected shape.
 - **Uploads** must be TIFF files (extension and file header are checked).
 - **Export** uses passed tasks only and cuts chips with `ST_Intersection` + `ST_Translate`; segmentation masks are
-  drawn pixel by pixel (a pixel belongs to a shape when its centre is inside); GeoJSON puts shapes on the map with
-  `ST_Affine` (geotransform) + `ST_Transform` (to EPSG:4326).
+  drawn pixel by pixel (a pixel belongs to a shape when its centre is inside). Augmented copies are made with sharp
+  (`export/export.augment.ts`); their shapes get the same geometric change and are cut to the chip.
+  Cut and merge use `ST_Split` and `ST_Union`.
 
 **Frontend** (`frontend/`): React 19, Vite, React Router, **TanStack Query** (server data, caching, polling),
 React Hook Form + Zod, Tailwind CSS 4, Radix Dialog, sonner toasts, zustand (editor state), **OpenLayers** (editor map).

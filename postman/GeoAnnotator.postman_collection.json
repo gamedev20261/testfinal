@@ -1825,6 +1825,89 @@
           ]
         },
         {
+          "name": "Cut: split a polygon along a line",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/tasks/{{taskId}}/images/{{imageId}}/split",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "tasks",
+                "{{taskId}}",
+                "images",
+                "{{imageId}}",
+                "split"
+              ]
+            },
+            "description": "The line must cross the polygon from outside to outside. Answers { pieces: [polygon, …] }, largest first; the editor keeps the first as the shape and saves the others as new shapes. Nothing is saved here.",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"geometry\": {\n    \"type\": \"Polygon\",\n    \"coordinates\": [\n      [\n        [\n          100,\n          100\n        ],\n        [\n          300,\n          100\n        ],\n        [\n          300,\n          200\n        ],\n        [\n          100,\n          200\n        ],\n        [\n          100,\n          100\n        ]\n      ]\n    ]\n  },\n  \"line\": [\n    [\n      200,\n      50\n    ],\n    [\n      200,\n      250\n    ]\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Two pieces', () => pm.expect(pm.response.json().pieces).to.have.length(2));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Merge: join polygons that touch",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/tasks/{{taskId}}/images/{{imageId}}/merge",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "tasks",
+                "{{taskId}}",
+                "images",
+                "{{imageId}}",
+                "merge"
+              ]
+            },
+            "description": "Shapes that touch or overlap become one polygon (400 when they are apart). Nothing is saved here.",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"geometries\": [\n    {\n      \"type\": \"Polygon\",\n      \"coordinates\": [\n        [\n          [\n            100,\n            100\n          ],\n          [\n            200,\n            100\n          ],\n          [\n            200,\n            200\n          ],\n          [\n            100,\n            200\n          ],\n          [\n            100,\n            100\n          ]\n        ]\n      ]\n    },\n    {\n      \"type\": \"Polygon\",\n      \"coordinates\": [\n        [\n          [\n            200,\n            120\n          ],\n          [\n            300,\n            120\n          ],\n          [\n            300,\n            180\n          ],\n          [\n            200,\n            180\n          ],\n          [\n            200,\n            120\n          ]\n        ]\n      ]\n    }\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Shapes on the image",
           "request": {
             "method": "GET",
@@ -2391,7 +2474,7 @@
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{baseUrl}}/projects/{{projectId}}/export?format=MASKS&chipSize=512&mergeClasses=false&includeImages=true",
+              "raw": "{{baseUrl}}/projects/{{projectId}}/export?chipSize=512&mergeClasses=false",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -2402,24 +2485,16 @@
               ],
               "query": [
                 {
-                  "key": "format",
-                  "value": "MASKS"
-                },
-                {
                   "key": "chipSize",
                   "value": "512"
                 },
                 {
                   "key": "mergeClasses",
                   "value": "false"
-                },
-                {
-                  "key": "includeImages",
-                  "value": "true"
                 }
               ]
             },
-            "description": "masks/<class>/<chip>.png: the class white, everything else black. images/ has the JPEG chips, classes.json the folders."
+            "description": "Segmentation projects always export masks (format can be left out). images/ + masks/<class>/<chip>.png (the class white, everything else black) + classes.txt (id and name)."
           },
           "event": [
             {
@@ -2434,11 +2509,11 @@
           ]
         },
         {
-          "name": "Download masks, all classes merged (custom 800 px chips)",
+          "name": "Download masks, merged, with augmentation (custom 800 px chips)",
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{baseUrl}}/projects/{{projectId}}/export?format=MASKS&chipSize=800&mergeClasses=true&includeImages=true",
+              "raw": "{{baseUrl}}/projects/{{projectId}}/export?chipSize=800&mergeClasses=true&augmentCopies=2&geometric=FLIP_H,ROTATE_90&color=BRIGHTNESS,NOISE",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -2448,10 +2523,6 @@
                 "export"
               ],
               "query": [
-                {
-                  "key": "format",
-                  "value": "MASKS"
-                },
                 {
                   "key": "chipSize",
                   "value": "800"
@@ -2461,12 +2532,20 @@
                   "value": "true"
                 },
                 {
-                  "key": "includeImages",
-                  "value": "true"
+                  "key": "augmentCopies",
+                  "value": "2"
+                },
+                {
+                  "key": "geometric",
+                  "value": "FLIP_H,ROTATE_90"
+                },
+                {
+                  "key": "color",
+                  "value": "BRIGHTNESS,NOISE"
                 }
               ]
             },
-            "description": "masks/<chip>.png: black background, each class in its own colour (see classes.json). Any chip size from 64 to 10000 px works; 0 = whole images."
+            "description": "masks/<chip>.png: black background, each class in its own colour. augmentCopies=2 adds <chip>_aug1/_aug2 with the chosen geometric (FLIP_H, FLIP_V, ROTATE_90, ROTATE, ZOOM) and colour (BRIGHTNESS, CONTRAST, SATURATION, HUE, BLUR, SHARPEN, NOISE, GRAYSCALE) augmentations; masks move with the image."
           },
           "event": [
             {
@@ -2481,11 +2560,11 @@
           ]
         },
         {
-          "name": "Download YOLO-seg (640 px chips)",
+          "name": "A detection format in a segmentation project → 400",
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{baseUrl}}/projects/{{projectId}}/export?format=YOLO&chipSize=640&includeImages=true",
+              "raw": "{{baseUrl}}/projects/{{projectId}}/export?format=VOC&chipSize=512",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -2497,19 +2576,15 @@
               "query": [
                 {
                   "key": "format",
-                  "value": "YOLO"
+                  "value": "VOC"
                 },
                 {
                   "key": "chipSize",
-                  "value": "640"
-                },
-                {
-                  "key": "includeImages",
-                  "value": "true"
+                  "value": "512"
                 }
               ]
             },
-            "description": "Segmentation: one polygon per line. (Detection projects also offer format=YOLO_OBB for rotated boxes.)"
+            "description": "Object detection projects export format=YOLO_OBB or format=VOC (Pascal VOC XML); segmentation only masks."
           },
           "event": [
             {
@@ -2517,18 +2592,18 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));"
                 ]
               }
             }
           ]
         },
         {
-          "name": "Download COCO",
+          "name": "Augmented copies without an augmentation → 400",
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{baseUrl}}/projects/{{projectId}}/export?format=COCO&chipSize=0&includeImages=false",
+              "raw": "{{baseUrl}}/projects/{{projectId}}/export?chipSize=512&augmentCopies=2",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -2539,16 +2614,12 @@
               ],
               "query": [
                 {
-                  "key": "format",
-                  "value": "COCO"
-                },
-                {
                   "key": "chipSize",
-                  "value": "0"
+                  "value": "512"
                 },
                 {
-                  "key": "includeImages",
-                  "value": "false"
+                  "key": "augmentCopies",
+                  "value": "2"
                 }
               ]
             },
@@ -2560,46 +2631,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Download GeoJSON (lon/lat for GeoTIFFs)",
-          "request": {
-            "method": "GET",
-            "url": {
-              "raw": "{{baseUrl}}/projects/{{projectId}}/export?format=GEOJSON&includeImages=false",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "projects",
-                "{{projectId}}",
-                "export"
-              ],
-              "query": [
-                {
-                  "key": "format",
-                  "value": "GEOJSON"
-                },
-                {
-                  "key": "includeImages",
-                  "value": "false"
-                }
-              ]
-            },
-            "description": ""
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));"
                 ]
               }
             }
@@ -2610,7 +2642,7 @@
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{baseUrl}}/projects/{{projectId}}/export?format=MASKS&chipSize=50",
+              "raw": "{{baseUrl}}/projects/{{projectId}}/export?chipSize=50",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -2620,10 +2652,6 @@
                 "export"
               ],
               "query": [
-                {
-                  "key": "format",
-                  "value": "MASKS"
-                },
                 {
                   "key": "chipSize",
                   "value": "50"

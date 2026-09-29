@@ -95,7 +95,8 @@ management page, and the editor layout (tools left, image centre, classes/object
 
 | Feature | Decision |
 |---|---|
-| Login, first-run admin registration, change password | **Keep** |
+| Login, change password | **Keep** |
+| First-run "Register" page | **Replace** with a seed script that creates the first admin from `.env` |
 | Home dashboard: project cards, search / filter / sort, admin summary cards, "my tasks" | **Keep** |
 | Admin Settings: users + user groups, label classes + label groups | **Keep** |
 | Project Management tabs: Tasks, Label Classes, Imagery, Team, Stats | **Keep** (the confusingly named "roles" tab is renamed "Label Classes") |
@@ -119,7 +120,7 @@ management page, and the editor layout (tools left, image centre, classes/object
 ## 5. Folder structure
 
 Code folders contain **only code** (with short comments).
-All long explanations live in `docs/lessons/`, and API tests live in `postman/` —
+All long explanations live in `learn/`, and API tests live in `postman/`,
 so the code stays clean and the teaching material stays separate.
 
 ```
@@ -128,13 +129,14 @@ testfinal/
 ├── README.md                   ← how to run everything
 ├── docker-compose.yml          ← PostgreSQL for development
 │
-├── docs/lessons/               ← 📘 one lesson per module (the "teacher")
-│   ├── 00-web-fundamentals.md
-│   ├── 01-database.md
-│   └── …
+├── learn/                      ← 📘 the "teacher" (see learn/README.md)
+│   ├── concepts/               ← general web knowledge, from zero
+│   ├── patches/                ← one guide per patch: what, reading order, run, test
+│   └── files/                  ← one explanation per code file, SAME path as the code
+│       └── backend/src/app.ts.md   explains backend/src/app.ts
 │
 ├── postman/                    ← 🧪 import these into Postman
-│   ├── GeoAnnotator.postman_collection.json   (one folder per module)
+│   ├── GeoAnnotator.postman_collection.json   (one folder per patch)
 │   └── Local.postman_environment.json         (baseUrl + saved ids)
 │
 ├── backend/
@@ -249,8 +251,16 @@ stateDiagram-v2
 
 ## 7. The modules
 
-17 core modules + optional bonus modules. Each module is **one step**: I build it,
-you read the lesson, test it in Postman, run the UI, ask questions, then we continue.
+17 core modules + optional bonus modules. The modules are the big picture; the actual
+work is delivered **screen by screen, in small patches** (one commit each, tagged
+`patch-NN`). A screen with several parts (e.g. Admin Settings → Users tab → create dialog)
+is built one part at a time. After each batch of patches you pull, read, run and test,
+then we continue.
+
+The database is not created all at once: each screen adds the tables it needs with a new
+migration, so you see the schema grow.
+
+**Progress** is tracked in [README.md](README.md).
 
 ### Part A — Foundations (used by every portal)
 
@@ -258,7 +268,7 @@ you read the lesson, test it in Postman, run the UI, ask questions, then we cont
 |---|---|---|---|
 | **00** | Web fundamentals & setup | Folder skeleton, Postgres in Docker, a "hello" API and a "hello" React page talking to each other | How the web works: browser ↔ server, HTTP methods, status codes, JSON, REST, ports, `.env`. Node/npm, Git, Postman, Docker basics. HTML/CSS/JS → TypeScript → React (components, props, state), Tailwind. |
 | **01** | Database with Prisma | `schema.prisma` with all 14 tables, first migration, seed script | Tables, primary/foreign keys, relations (1-to-many, many-to-many), enums, soft delete, migrations, Prisma Studio |
-| **02** | Authentication | `POST /auth/register` (first admin only), `/login`, `/logout`, `GET /auth/me`, `/change-password`; Login + Register pages | Password hashing (bcrypt), JWT, cookies vs headers, middleware, rate limiting, protected routes in React, Zustand store, axios client |
+| **02** | Authentication | Seed script for the first admin, `/login`, `/logout`, `GET /auth/me`, `/change-password`; Login page | Password hashing (bcrypt), JWT, cookies vs headers, middleware, rate limiting, protected routes in React, Zustand store, axios client |
 | **03** | App shell & UI kit | Sidebar + top nav that change per role, route guards, error boundary, toasts, shared components | Layout components, React Router nested routes, role-based menus, shadcn/ui, accessibility basics |
 
 ### Part B — Admin portal
@@ -305,26 +315,26 @@ you read the lesson, test it in Postman, run the UI, ask questions, then we cont
 
 ---
 
-## 8. How every module is delivered
+## 8. How every patch is delivered
 
-Every module produces the same five things, so you always know where to look:
+Every patch produces the same five things, so you always know where to look:
 
 1. **Code**: backend module folder + frontend feature folder, small files, short comments.
-2. **Lesson** `docs/lessons/NN-name.md`:
-   - *Goal*: which screen/portal this powers (with a screenshot of the original).
+2. **Patch guide** `learn/patches/NN-name.md` plus **one explanation per file** in `learn/files/`:
+   - *Goal*: which screen/portal this powers.
    - *New concepts*: explained from zero, with diagrams.
    - *Backend walkthrough*: file by file, in the order a request passes through them.
    - *Frontend walkthrough*: the component tree and where each piece of data comes from.
    - **API → Screen map**: a table like the one below.
    - *Trace a click*: one user action followed from button → API → service → database → back.
    - *Exercises*: small changes to try yourself (answers at the bottom).
-3. **Postman folder** for the module: requests run in order, test scripts save ids
+3. **Postman folder** for the patch (when it adds endpoints): requests run in order, test scripts save ids
    (e.g. `projectId`) into the environment for the next request, and each request's
    description says *what it returns, who may call it, and which screen uses it*.
    Includes "should fail" requests (wrong password → 401, annotator creating a project → 403).
-4. **Git tag** `module-NN`, so you can run `git diff module-05 module-06` to see
-   exactly what a module added.
-5. **Checklist** at the end of the lesson: "you're ready for the next module if you can…".
+4. **Git tag** `patch-NN`, so you can run `git diff patch-05 patch-06` to see
+   exactly what a patch added.
+5. **"Check yourself" questions** at the end of the guide, with answers.
 
 Example of an **API → Screen map** (from Module 06):
 
@@ -340,7 +350,7 @@ Example of an **API → Screen map** (from Module 06):
 
 | Module | Endpoints |
 |---|---|
-| 02 Auth | `POST /api/auth/register` · `POST /api/auth/login` · `POST /api/auth/logout` · `GET /api/auth/me` · `POST /api/auth/change-password` |
+| 02 Auth | `POST /api/auth/login` · `POST /api/auth/logout` · `GET /api/auth/me` · `POST /api/auth/change-password` |
 | 04 Users | `GET/POST /api/users` · `PATCH/DELETE /api/users/:id` · `GET/POST /api/user-groups` · `DELETE /api/user-groups/:id` |
 | 05 Label classes | `GET/POST /api/label-classes` · `PATCH/DELETE /api/label-classes/:id` · `GET/POST /api/label-groups` · `DELETE /api/label-groups/:id` |
 | 06 Projects | `GET/POST /api/projects` · `GET/PATCH/DELETE /api/projects/:id` · `GET/POST /api/projects/:id/members` · `DELETE /api/projects/:id/members/:userId` · `GET/POST /api/projects/:id/label-classes` · `DELETE /api/projects/:id/label-classes/:classId` · `GET /api/projects/:id/stats` |
@@ -367,9 +377,9 @@ Module 00 walks through installing and checking each one.
 
 ---
 
-## 11. Decisions to confirm before Module 00
+## 11. Decisions
 
-These are my defaults. Tell me if you want any changed:
+Accepted when the build started (any of them can still be revisited):
 
 1. **TypeScript** everywhere (recommended; lessons explain the syntax as it appears) rather than plain JavaScript.
 2. **Prisma** instead of Knex.

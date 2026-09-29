@@ -29,10 +29,11 @@ type Props = {
   onImage: (index: number) => void;
   onRejectImage: () => void;
   onFailTask: () => void;
+  onUndo: () => void; // takes back the last point while drawing, else the last change
 };
 
-export function EditorToolbar({ detail, mode, imageIndex, onImage, onRejectImage, onFailTask }: Props) {
-  const { tool, setTool, activeClassId, setActiveClass, undoStack, redoStack, undo, redo, showNames, toggleNames } = useEditorStore();
+export function EditorToolbar({ detail, mode, imageIndex, onImage, onRejectImage, onFailTask, onUndo }: Props) {
+  const { tool, setTool, activeClassId, setActiveClass, redoStack, redo, showNames, toggleNames } = useEditorStore();
   const { brushRadius, brushErase, setBrush, wandTolerance, setWandTolerance } = useEditorStore();
   const tools: Tool[] = ['SELECT', ...TOOLS_BY_TYPE[detail.project.type]];
   const count = detail.images.length;
@@ -90,7 +91,7 @@ export function EditorToolbar({ detail, mode, imageIndex, onImage, onRejectImage
             </label>
           )}
           <div className="flex">
-            <button onClick={() => undo()} disabled={!undoStack.length} className="rounded p-1.5 text-text-secondary hover:bg-surface-alt disabled:opacity-30" aria-label="Undo (Ctrl+Z)" title="Undo (Ctrl+Z)"><Undo2 size={15} /></button>
+            <button onClick={onUndo} className="rounded p-1.5 text-text-secondary hover:bg-surface-alt disabled:opacity-30" aria-label="Undo (Ctrl+Z)" title="Undo (Ctrl+Z)"><Undo2 size={15} /></button>
             <button onClick={() => redo()} disabled={!redoStack.length} className="rounded p-1.5 text-text-secondary hover:bg-surface-alt disabled:opacity-30" aria-label="Redo (Ctrl+Y)" title="Redo (Ctrl+Y)"><Redo2 size={15} /></button>
           </div>
           <Select aria-label="Class for new shapes" value={activeClassId ?? ''} onChange={(e) => setActiveClass(e.target.value)} className="w-44 py-1 text-xs">

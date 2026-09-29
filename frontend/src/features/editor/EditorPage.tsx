@@ -160,6 +160,12 @@ function Editor({ detail }: { detail: TaskDetail }) {
     setZoomToken((n) => n + 1);
   }
 
+  // While a polygon, rotated box or cut line is being drawn, undo takes back its last point;
+  // otherwise it undoes the last saved change
+  const undo = () => {
+    if (mode.canEdit && !mapRef.current?.removeLastPoint()) void store.undo();
+  };
+
   useEditorKeys({
     tools: mode.canEdit ? tools : [],
     onTool: store.setTool,
@@ -167,7 +173,7 @@ function Editor({ detail }: { detail: TaskDetail }) {
     onDelete: deleteSelected,
     onEscape: () => mapRef.current?.cancelDrawing() || store.select(null),
     onBackspace: () => mapRef.current?.removeLastPoint() ?? false,
-    onUndo: () => mode.canEdit && void store.undo(),
+    onUndo: undo,
     onRedo: () => mode.canEdit && void store.redo(),
     onImageStep: (step) => openImage(imageIndex + step),
     onApprove: () => mode.canReview && store.selectedId && review.reviewLabel.mutate({ id: store.selectedId, status: 'APPROVED' }),
@@ -184,6 +190,7 @@ function Editor({ detail }: { detail: TaskDetail }) {
         onImage={openImage}
         onRejectImage={() => setAsking({ kind: 'image' })}
         onFailTask={() => setAsking({ kind: 'task' })}
+        onUndo={undo}
       />
       <Banners detail={detail} mode={mode} labels={labels} />
 

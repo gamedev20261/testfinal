@@ -83,7 +83,7 @@ Set `SEED_DEMO_USERS=false` in `.env` to skip the demo accounts and classes.
 | `Esc` | Cancel drawing / deselect |
 | `Backspace` | Remove the last polygon (or rotated box) corner while drawing |
 | `Shift` + brush stroke | Erase from the selected shape |
-| `Ctrl+Z` / `Ctrl+Y` (`Ctrl+Shift+Z`) | Undo / redo |
+| `Ctrl+Z` / `Ctrl+Y` (`Ctrl+Shift+Z`) | Undo / redo. While drawing a polygon, rotated box or cut line, `Ctrl+Z` removes the last point instead |
 | `[` / `]` | Previous / next image |
 | `L` | Show class names on the map |
 | `A` / `R` | Auditor: approve / reject the selected shape |

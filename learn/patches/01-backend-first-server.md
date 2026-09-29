@@ -4,7 +4,7 @@
 |---|---|
 | **Screen** | Login (Admin portal): step 1 of 6 |
 | **Part** | Backend |
-| **Git tag** | `patch-01` |
+| **Commit** | `Patch 01: backend first server` → `git show --stat ':/^Patch 01:'` |
 | **Before you start** | Install the tools in [setup.md](../setup.md) |
 
 ## Where we are

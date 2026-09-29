@@ -39,15 +39,19 @@ tells you what changed.
 
 ## Moving between patches with git
 
-Every patch is one commit with a tag (`patch-01`, `patch-02`, …).
+Every patch is one commit whose message starts with `Patch NN:`. Git can find a commit by
+its message with the `:/` syntax (`':/^Patch 03:'` means "the commit whose message starts
+with *Patch 03:*"):
 
 ```bash
-git log --oneline                 # list the patches
-git show patch-03 --stat          # which files patch 03 changed
-git diff patch-02 patch-03        # exactly what patch 03 added
-git checkout patch-02             # look at the project as it was after patch 02
-git checkout claude/cool-goldberg-m6plmm   # come back to the latest version
+git log --oneline                              # list the patches (newest first)
+git show --stat ':/^Patch 03:'                 # which files patch 03 changed
+git diff ':/^Patch 02:' ':/^Patch 03:'         # exactly what patch 03 added
+git checkout ':/^Patch 02:'                    # look at the project as it was after patch 02
+git checkout claude/cool-goldberg-m6plmm       # come back to the latest version
 ```
+
+You can also use the short commit id that `git log --oneline` prints, e.g. `git show --stat 24ed442`.
 
 ## Seeing the diagrams
 

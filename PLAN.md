@@ -252,8 +252,8 @@ stateDiagram-v2
 ## 7. The modules
 
 17 core modules + optional bonus modules. The modules are the big picture; the actual
-work is delivered **screen by screen, in small patches** (one commit each, tagged
-`patch-NN`). A screen with several parts (e.g. Admin Settings → Users tab → create dialog)
+work is delivered **screen by screen, in small patches** (one commit each, whose message
+starts with `Patch NN:`). A screen with several parts (e.g. Admin Settings → Users tab → create dialog)
 is built one part at a time. After each batch of patches you pull, read, run and test,
 then we continue.
 
@@ -332,8 +332,8 @@ Every patch produces the same five things, so you always know where to look:
    (e.g. `projectId`) into the environment for the next request, and each request's
    description says *what it returns, who may call it, and which screen uses it*.
    Includes "should fail" requests (wrong password → 401, annotator creating a project → 403).
-4. **Git tag** `patch-NN`, so you can run `git diff patch-05 patch-06` to see
-   exactly what a patch added.
+4. **One commit per patch**, message starting with `Patch NN:`, so
+   `git diff ':/^Patch 05:' ':/^Patch 06:'` shows exactly what a patch added.
 5. **"Check yourself" questions** at the end of the guide, with answers.
 
 Example of an **API → Screen map** (from Module 06):

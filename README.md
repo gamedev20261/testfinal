@@ -19,10 +19,11 @@ docker compose up -d
 
 # 2. Backend: http://localhost:3001
 cd backend
-cp .env.example .env   # then set your own JWT_SECRET
+cp .env.example .env   # then set DATABASE_URL (and your own JWT_SECRET)
 npm install
 npm run db:migrate
 npm run db:seed        # creates the admin from ADMIN_EMAIL / ADMIN_PASSWORD in .env
+npm run doctor         # checks the setup; fix any [FAIL] line it shows
 npm run dev
 
 # 3. Frontend: http://localhost:5173 (in a second terminal)
@@ -30,6 +31,9 @@ cd frontend
 npm install
 npm run dev
 ```
+
+Something not working? Run `npm run doctor` in `backend/` and see
+[learn/troubleshooting.md](learn/troubleshooting.md).
 
 ## Progress
 

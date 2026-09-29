@@ -8,6 +8,9 @@ Same idea as the [backend's `package.json`](../backend/package.json.md): the fro
 packages and commands. The frontend is a **separate project** with its own `node_modules/`.
 Run its commands from inside the `frontend/` folder.
 
+Node.js 22.12 or newer is needed (Vite refuses older versions with
+*Vite requires Node.js version 20.19+ or 22.12+*).
+
 ## Scripts
 
 | Command | Runs | What it does |

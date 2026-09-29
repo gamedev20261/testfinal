@@ -1,6 +1,6 @@
 # `backend/src/config/env.ts`
 
-> Added in **patch 01** · Changed in **patch 02** (`DATABASE_URL`), **patch 03** (`JWT_SECRET`, `SESSION_HOURS`), after **patch 06** (missing-file hint) · [View the code](../../../../../backend/src/config/env.ts)
+> Added in **patch 01** · Changed in **patch 02** (`DATABASE_URL`), **patch 03** (`JWT_SECRET`, `SESSION_HOURS`), after **patch 06** (Node.js check, rules moved to `env-schema.ts`) · [View the code](../../../../../backend/src/config/env.ts)
 
 ## What it is for
 
@@ -14,43 +14,59 @@ start *with a clear message*, instead of failing mysteriously an hour later.
 
 ## The code, piece by piece
 
-### 1. Load the `.env` file
+### 1. Is Node.js new enough?
 
 ```ts
-let envFileFound = true;
-try {
-  process.loadEnvFile();
-} catch {
-  envFileFound = false;
+if (!isSupportedNode()) {
+  console.error(`Node.js ${NODE_REQUIREMENT} is required, but this is ${process.version}.`);
+  console.error('Install Node.js 22 LTS from https://nodejs.org, then run "npm install" again.');
+  process.exit(1);
+}
+```
+Checked first, because an old Node.js fails later in confusing ways (inside Prisma, or
+because `process.loadEnvFile` doesn't exist yet). The rule is in
+[`node-version.ts`](node-version.ts.md). `process.exit(1)` ends the program; exit code `1`
+means "ended with an error".
+
+### 2. Load the `.env` file
+
+```ts
+const envFileFound = existsSync('.env');
+if (envFileFound) {
+  process.loadEnvFile('.env');
 }
 ```
 
-`process.env` is a built-in Node object holding the *environment variables* of the
-running program. `process.loadEnvFile()` (built into Node 22) reads the `.env` file in the
-current folder and copies each `NAME=value` line into `process.env`.
-
-`try { … } catch { … }` means: *try this; if it throws an error, run the catch block
-instead of crashing*. On a real server there is often no `.env` file (variables are set by
-the hosting system), and that is fine. We remember whether the file was found
-(`envFileFound`) to give a better hint below.
+- `existsSync('.env')` (from Node's `node:fs` module) answers "is there a file called
+  `.env` in the current folder?". `npm run dev` always runs in the `backend` folder.
+- `process.env` is a built-in Node object holding the *environment variables* of the
+  running program. `process.loadEnvFile('.env')` reads the file and copies each
+  `NAME=value` line into it.
+- A missing file is allowed: on a real server there's often no `.env` file (the hosting
+  system sets the variables), and that's fine. We remember whether the file was found, to
+  give a better hint below.
 
 > A variable that already exists (set in the terminal, e.g. `PORT=4000 npm run dev`)
 > is **not** overwritten by the file. That lets you override a setting for one run.
 
-### 2. Describe the settings with Zod
+### 3. Check the settings with Zod
 
 ```ts
-const envSchema = z.object({
+const result = envSchema.safeParse(process.env);
+```
+
+The rules themselves live in [`env-schema.ts`](env-schema.ts.md), so `npm run doctor` can
+use them too. **Zod** lets us describe what data should look like: a *schema*. Read each
+rule as a sentence:
+
+```ts
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().int().positive().default(3001),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
   DATABASE_URL: z.url(),
   JWT_SECRET: z.string().min(32, 'must be at least 32 characters long'),
   SESSION_HOURS: z.coerce.number().positive().default(24),
-});
 ```
-
-**Zod** lets us describe what data should look like: a *schema*. Read each line as a sentence:
 
 - `NODE_ENV` must be one of three words; if missing, use `'development'`.
 - `PORT`: `z.coerce.number()` converts the text `"3001"` into the number `3001`,
@@ -62,29 +78,22 @@ const envSchema = z.object({
   by trying every possibility, and then anyone could forge a login. No default, on purpose.
 - `SESSION_HOURS` (patch 03): how long a login lasts; default 24.
 
-We will use Zod the same way to check what users send to the API.
+`safeParse` never throws; it returns either `{ success: true, data }` or
+`{ success: false, error }`.
 
-### 3. Check, and stop if wrong
+### 4. Stop if something is wrong
 
 ```ts
-const result = envSchema.safeParse(process.env);
-
 if (!result.success) {
   const hint = envFileFound ? '' : '\n\nbackend/.env was not found. Copy backend/.env.example to backend/.env and edit it.';
   console.error('Invalid settings in backend/.env:\n' + z.prettifyError(result.error) + hint);
+  console.error('\nRun "npm run doctor" for step-by-step help.');
   process.exit(1);
 }
 ```
 
-`safeParse` never throws; it returns either `{ success: true, data }` or
-`{ success: false, error }`. On failure we print a readable list of the problems and stop
-the program. `process.exit(1)`: exit code `1` means "ended with an error".
-
-If the file itself was missing, the message ends with
-*backend/.env was not found. Copy backend/.env.example to backend/.env and edit it.*,
-the most common reason for missing settings after cloning the project.
-
-Try it: `PORT=abc npm run dev` prints
+Print a readable list of the problems and stop. If the file itself was missing (the most
+common reason after cloning the project), say so. Try it: `PORT=abc npm run dev` prints
 
 ```
 Invalid settings in backend/.env:
@@ -92,7 +101,7 @@ Invalid settings in backend/.env:
   → at PORT
 ```
 
-### 4. Export the result
+### 5. Export the result
 
 ```ts
 export const env = result.data;

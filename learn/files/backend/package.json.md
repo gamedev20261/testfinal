@@ -17,13 +17,16 @@ expect the older `require()` style.
 ```json
 "engines": { "node": ">=22" },
 ```
-Documents that Node 22 or newer is needed (we use `process.loadEnvFile()`, added in Node 21).
+Documents that Node 22 or newer is needed. On an older Node, `npm install` prints an
+`EBADENGINE` warning. The exact rule (22.12+, or 20.19+) is checked when the server starts,
+which then refuses to run with a clear message ([`node-version.ts`](src/config/node-version.ts.md)).
 
 ### Scripts
 
 | Command | Runs | What it does | Since |
 |---|---|---|---|
 | `npm run dev` | `tsx watch src/server.ts` | Starts the API and restarts it whenever you save a file | 01 |
+| `npm run doctor` | `tsx src/scripts/doctor.ts` | Checks your setup (Node, `.env`, database, tables, admin…) and says how to fix what's missing ([explained](src/scripts/doctor.ts.md)) | after 06 |
 | `npm run typecheck` | `tsc --noEmit` | Checks every file for type errors without writing any output | 01 |
 | *(automatic)* | `prisma generate` | `postinstall` runs by itself after every `npm install`. It generates the typed database client in `src/generated/prisma` | 02 |
 | `npm run db:migrate` | `prisma migrate dev` | Applies migrations to your database. After a schema change, it first writes a new migration. | 02 |

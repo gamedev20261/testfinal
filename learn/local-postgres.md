@@ -74,6 +74,7 @@ In a terminal inside `backend/`:
 npm install          # packages (once, and after pulling new patches)
 npm run db:migrate   # creates the "geoannotator" database and its tables
 npm run db:seed      # creates the admin: "Created admin admin@example.com"
+npm run doctor       # checks everything; fix any [FAIL] line it shows
 npm run dev          # starts the API
 ```
 
@@ -129,4 +130,6 @@ The backend prints what went wrong when it starts. Find the message here:
 | `P3014 … could not create the shadow database` | The database user may not create databases | Use `postgres`, or give your user `CREATEDB` (see above) |
 | `listen EADDRINUSE … :3001` | A backend is already running in another terminal | Stop it with `Ctrl+C` |
 
-Still stuck? Copy the **whole** terminal output and ask. (The backend doesn't print your password, but check before sharing anything.)
+Still stuck? Run `npm run doctor`, copy its **whole** output and ask. (It doesn't print your
+password, but check before sharing anything.) Problems outside the database (PowerShell,
+Node version, the frontend) are in [troubleshooting.md](troubleshooting.md).

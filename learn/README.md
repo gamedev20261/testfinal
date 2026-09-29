@@ -52,6 +52,11 @@ git checkout claude/cool-goldberg-m6plmm       # come back to the latest version
 ```
 
 You can also use the short commit id that `git log --oneline` prints, e.g. `git show --stat 24ed442`.
+To read one file as it was in a commit, write `id:path`:
+
+```bash
+git show a06d240:frontend/src/App.tsx          # App.tsx as it was in patch 04
+```
 
 ## Seeing the diagrams
 

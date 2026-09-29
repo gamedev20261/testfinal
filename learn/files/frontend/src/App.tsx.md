@@ -1,18 +1,31 @@
 # `frontend/src/App.tsx`
 
-> Added in **patch 04** · [View the code](../../../../frontend/src/App.tsx) · Background: [React basics](../../../concepts/react-basics.md), [Tailwind](../../../concepts/tailwind.md)
+> Added in **patch 04** · Changed in **patch 05** · [View the code](../../../../frontend/src/App.tsx) · Background: [React basics](../../../concepts/react-basics.md)
 
 ## What it is for
 
-The **root component**: the top of the component tree. For now it shows one card that
-proves two things: the frontend runs, and it can reach the backend.
-In patch 05 it will show the login screen instead.
+The **root component**: the top of the component tree, drawn by [`main.tsx`](main.tsx.md).
 
-## The code
+## Now (patch 05)
 
 ```tsx
-import { ApiStatus } from './components/ApiStatus';
+import { LoginPage } from './features/auth/LoginPage';
 
+export function App() {
+  return <LoginPage />;
+}
+```
+
+The app is only the [login screen](features/auth/LoginPage.tsx.md) for now. In patch 06,
+`App` becomes the list of **routes**: which page to show for which URL (`/login`, `/`),
+and which pages need a logged-in user.
+
+## Before (patch 04)
+
+In patch 04, `App` showed a test card with the `ApiStatus` component, to prove the
+frontend could reach the backend:
+
+```tsx
 export function App() {
   return (
     <main className="min-h-screen flex items-center justify-center p-4">
@@ -28,11 +41,7 @@ export function App() {
 
 - A component is just a **function that returns JSX**. `export` lets `main.tsx` import it.
 - `<main>` fills at least the whole screen height (`min-h-screen`) and centres its child
-  both ways (`flex items-center justify-center`). `p-4` keeps a margin on small screens.
-- The card: white, rounded, shadowed, with our light border; `w-full max-w-sm` = full
-  width on phones, but never wider than 24rem (384px).
-- `<ApiStatus />` uses our own component ([ApiStatus.tsx](components/ApiStatus.tsx.md)),
-  exactly like an HTML tag.
+  both ways (`flex items-center justify-center`).
+- `w-full max-w-sm` = full width on phones, but never wider than 24rem (384px).
 
-The card's classes are the same ones the original login card uses, so the next patch
-starts from the right look.
+That card became the login card: the same classes are in `LoginPage`.

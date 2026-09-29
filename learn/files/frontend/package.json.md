@@ -1,6 +1,6 @@
 # `frontend/package.json`
 
-> Added in **patch 04** · [View the file](../../../frontend/package.json) · Background: [Node, npm and TypeScript](../../concepts/node-npm-typescript.md)
+> Added in **patch 04** · Changed in **patch 05** · [View the file](../../../frontend/package.json) · Background: [Node, npm and TypeScript](../../concepts/node-npm-typescript.md)
 
 ## What it is for
 
@@ -24,6 +24,10 @@ Run its commands from inside the `frontend/` folder.
 | `react` | Components, state, hooks: the core of the UI |
 | `react-dom` | Draws React components into the browser page (the DOM) |
 | `@fontsource-variable/inter` | The **Inter** font, bundled with the app, so it works without internet access to Google Fonts (the original app did the same) |
+| `react-hook-form` | *(patch 05)* Form state, submit handling and error messages ([forms](../../concepts/forms.md)) |
+| `zod` | *(patch 05)* Validation rules, the same library as the backend |
+| `@hookform/resolvers` | *(patch 05)* Lets React Hook Form validate with a Zod schema |
+| `clsx`, `tailwind-merge` | *(patch 05)* Build `className` strings cleanly ([`cn`](src/lib/cn.ts.md)) |
 
 ## Dev dependencies (tools, not shipped to the browser)
 
@@ -35,4 +39,4 @@ Run its commands from inside the `frontend/` folder.
 | `typescript` | The type checker |
 | `@types/react`, `@types/react-dom` | Type descriptions for React |
 
-More packages are added in patches 05 and 06 (forms, routing, API calls).
+More packages are added in patch 06 (routing, API calls).

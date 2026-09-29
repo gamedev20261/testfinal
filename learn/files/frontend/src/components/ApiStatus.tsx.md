@@ -1,10 +1,13 @@
-# `frontend/src/components/ApiStatus.tsx`
+# `frontend/src/components/ApiStatus.tsx` *(removed in patch 05)*
 
-> Added in **patch 04** · [View the code](../../../../../frontend/src/components/ApiStatus.tsx) · Background: [React basics → state and effects](../../../../concepts/react-basics.md#4-state-data-that-changes)
+> Added in **patch 04** · **Removed in patch 05** (it was a test to prove the frontend could reach the API; the login screen replaced it)
+>
+> See the code as it was: `git show a06d240:frontend/src/components/ApiStatus.tsx`
+> (`a06d240` is patch 04's commit id, from `git log --oneline`; `id:path` shows a file as it was in that commit.)
 
-## What it is for
+## What it was for
 
-A small component that calls `GET /api/health` when it appears and shows the result:
+A small component that called `GET /api/health` when it appeared and showed the result:
 
 | Situation | Shows |
 |---|---|
@@ -13,9 +16,9 @@ A small component that calls `GET /api/health` when it appears and shows the res
 | database down | *API: error · database: unreachable* (red) |
 | backend not running | *API not reachable. Is the backend running?* (red) |
 
-It's our first component with **state** and an **effect**: the manual way to load data.
-In patch 06 we'll load data with TanStack Query instead, and this component is removed in
-patch 05. It's here to learn from.
+It was our first component with **state** and an **effect**: the manual way to load data.
+It's worth reading once, because in patch 06 a library (TanStack Query) does this work
+for us, and it helps to know what the library is doing.
 
 ## The code, piece by piece
 
@@ -33,8 +36,7 @@ What we expect `/api/health` to return (the backend's
   const [health, setHealth] = useState<Health | null>(null);
   const [failed, setFailed] = useState(false);
 ```
-- `health`: the answer, or `null` while we don't have it yet. `<Health | null>` tells
-  TypeScript which values are allowed.
+- `health`: the answer, or `null` while we don't have it yet.
 - `failed`: `true` if the request failed completely.
 
 ### The effect: fetch once
@@ -53,11 +55,8 @@ What we expect `/api/health` to return (the backend's
   forwards it to the backend.
 - `.then(...)` runs when the previous step finishes: first read the body as JSON, then
   store it in state. **Storing it re-renders the component**, which now shows the answer.
-- `.catch(...)` runs if any step failed (backend down → the proxy answers with an error
-  page that isn't JSON → `.json()` fails).
-
-`.then()` chains are the older way to write what `async`/`await` does. Both work; you'll
-see both in real code.
+- `.catch(...)` runs if any step failed (backend down → the proxy's error answer isn't
+  JSON → `.json()` fails).
 
 ### Deciding what to show
 
@@ -65,11 +64,9 @@ see both in real code.
   if (failed) {
     return <p className="mt-6 text-sm text-danger">API not reachable. Is the backend running?</p>;
   }
-
   if (!health) {
     return <p className="mt-6 text-sm text-text-secondary">Checking the API…</p>;
   }
-
   const ok = health.status === 'ok';
   return (
     <p className={`mt-6 text-sm ${ok ? 'text-success' : 'text-danger'}`}>
@@ -79,14 +76,10 @@ see both in real code.
 ```
 The component runs top to bottom **on every render**, and returns what fits the current
 state. Early `return`s handle the special cases first.
-- `className={`…${ok ? 'text-success' : 'text-danger'}`}`: a template string that picks
-  the colour class.
-- `{health.status}` inside JSX inserts the value.
 
-## Watch it happen
+## What it taught (and what replaces it)
 
-1. Open the browser's dev tools (F12) → **Network** → reload. You'll see the `health`
-   request and its JSON answer.
-2. Look at the **backend terminal**: two `GET /api/health` lines per page load. That's
-   `StrictMode` running the effect twice in development.
-3. Stop the backend (`Ctrl+C`) and reload the page: red message. Start it again, reload: green.
+Loading data by hand needs: a state for the data, a state for errors, (often) a state for
+"loading", an effect, and care with StrictMode's double run. Every screen that loads data
+would repeat this. From patch 06, **TanStack Query** gives all of it in one line:
+`const { data, isLoading, error } = useQuery(...)`.

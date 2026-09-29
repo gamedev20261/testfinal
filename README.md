@@ -40,5 +40,5 @@ npm run dev
 | 02 | Database and first admin user | [learn/patches/02-database-and-first-admin.md](learn/patches/02-database-and-first-admin.md) |
 | 03 | Login API + Postman | [learn/patches/03-login-api.md](learn/patches/03-login-api.md) |
 | 04 | Frontend: first page | [learn/patches/04-frontend-first-page.md](learn/patches/04-frontend-first-page.md) |
-| 05 | Login screen design | ⏳ |
+| 05 | Login screen design | [learn/patches/05-login-screen-design.md](learn/patches/05-login-screen-design.md) |
 | 06 | Connect the screen to the API | ⏳ |

@@ -1,9 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router';
 import { authApi } from '../../api/auth';
+import { currentUserKey } from '../../lib/query-client';
 
-// The cache key for "who is logged in?". Every component asking gets the same cached answer.
-export const currentUserKey = ['auth', 'me'] as const;
+export { currentUserKey };
 
 // The logged-in user: undefined while loading, null when logged out
 export function useCurrentUser() {
@@ -18,6 +18,7 @@ export function useLogin() {
   return useMutation({
     mutationFn: ({ email, password }: { email: string; password: string }) =>
       authApi.login(email, password),
+    meta: { inlineError: true }, // the login form shows the error itself
     // Store the user we got back, so pages know who is logged in without asking again
     onSuccess: (user) => queryClient.setQueryData(currentUserKey, user),
   });

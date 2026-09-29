@@ -7,6 +7,17 @@ export const api = axios.create({
   timeout: 30_000,
 });
 
+// A 401 on any normal request means the session ended (expired, or the password changed elsewhere).
+// Forgetting the user makes RequireAuth send the browser to the login page.
+let onSessionEnded = () => {};
+export const setSessionEndedHandler = (handler: () => void) => (onSessionEnded = handler);
+
+api.interceptors.response.use(undefined, (error) => {
+  const url: string = error.config?.url ?? '';
+  if (error.response?.status === 401 && !url.startsWith('/auth/')) onSessionEnded();
+  return Promise.reject(error);
+});
+
 // Turns any failed request into a sentence we can show to the user.
 // The backend always answers errors as { "error": "..." }.
 export function apiErrorMessage(error: unknown, fallback = 'Something went wrong'): string {

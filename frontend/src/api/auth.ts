@@ -15,6 +15,11 @@ export const authApi = {
     await api.post('/auth/logout');
   },
 
+  // POST /api/auth/change-password → other logins of this user end
+  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    await api.post('/auth/change-password', { currentPassword, newPassword });
+  },
+
   // GET /api/auth/me → the logged-in user, or null when nobody is logged in (401)
   async me(): Promise<User | null> {
     try {

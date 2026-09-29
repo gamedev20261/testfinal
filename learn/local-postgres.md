@@ -125,7 +125,7 @@ The backend prints what went wrong when it starts. Find the message here:
 | `password authentication failed for user "postgres"` | Wrong password (or user) in `DATABASE_URL` | Use the password you type in pgAdmin |
 | `P1000: Authentication failed …` (from `db:migrate`) | Same as above | Same as above |
 | `database "geoannotator" does not exist` | The database wasn't created yet | `npm run db:migrate` |
-| `Can't reach database server at 127.0.0.1:5432` | PostgreSQL isn't running, or uses another port | Windows: press `Win+R`, type `services.msc`, find *postgresql-x64-…* → *Start*. Check the port (step 1). |
+| `Can't reach database server at 127.0.0.1:5432` | PostgreSQL isn't running, or uses another port | Windows: press `Win+R`, type `services.msc`, find *postgresql-x64-…* → *Start*. Mac: see [troubleshooting → On a Mac](troubleshooting.md#on-a-mac). Check the port (step 1). |
 | `Cannot connect to the database postgres@12:5432` (a strange host) | A symbol in the password broke the URL | Encode it (step 3) |
 | `P3014 … could not create the shadow database` | The database user may not create databases | Use `postgres`, or give your user `CREATEDB` (see above) |
 | `listen EADDRINUSE … :3001` | A backend is already running in another terminal | Stop it with `Ctrl+C` |

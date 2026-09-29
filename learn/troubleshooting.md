@@ -52,6 +52,22 @@ Problems that happen before the checker can even run:
 | `git pull` says *Your local changes to the following files would be overwritten* | You edited a file that is in git (often `backend/.env.example`) | Keep your settings in `backend/.env` instead. Then undo the edit: `git checkout -- backend/.env.example` (or `git stash`), and `git pull` again. |
 | `Error: listen EADDRINUSE: address already in use :::3001` | The backend is already running in another terminal | Use that one, or stop it with `Ctrl+C` |
 | `Port 5173 is in use, trying another one…` | Another frontend is running | Fine: open the address Vite prints (e.g. http://localhost:5174) |
+| `npm warn allow-scripts N packages have install scripts not yet covered by allowScripts` | Newer npm versions (with Node 24) list packages that run a setup script while installing | Only a warning, safe to ignore here. If Prisma's script didn't run, Prisma downloads its engine by itself the first time `npm run db:migrate` needs it (tested). |
+
+## On a Mac
+
+- **Create `.env`:** in the `backend` folder, `cp .env.example .env`. Files starting with a
+  dot are hidden in Finder (`Cmd+Shift+.` shows them), so edit it in **VS Code**. Avoid
+  TextEdit: it can turn `"` into curly quotes and break the file.
+- **Set `DATABASE_URL` from the terminal** (replace `YOUR_PASSWORD`; the command changes only
+  that one line):
+  ```bash
+  node -e 'const fs=require("fs");fs.writeFileSync(".env",fs.readFileSync(".env","utf8").replace(/^DATABASE_URL=.*$/m,"DATABASE_URL=postgresql://postgres:YOUR_PASSWORD@localhost:5432/geoannotator"))'
+  grep ^DATABASE_URL .env     # check the result
+  ```
+- **PostgreSQL not running?** With the installer from postgresql.org (EnterpriseDB) it starts
+  by itself when the Mac starts; pgAdmin shows whether it's up. With **Postgres.app**, open
+  the app and press *Start*. With **Homebrew**: `brew services start postgresql@16`.
 
 ## Step 3: if the app runs but doesn't work
 

@@ -30,7 +30,7 @@ export function databaseFix(problem: string): string {
     return 'The database is not created yet: run "npm run db:migrate".';
   }
   if (problem.includes("Can't reach database server") || problem.includes('timeout')) {
-    return 'PostgreSQL is not running, or uses another port. Docker: "docker compose up -d". Windows: Win+R → services.msc → postgresql-x64-… → Start.';
+    return 'PostgreSQL is not running, or uses another port. Docker: "docker compose up -d". Mac: start it in Postgres.app, or "brew services start postgresql@16". Windows: Win+R → services.msc → postgresql-x64-… → Start.';
   }
   return 'Check DATABASE_URL in backend/.env (learn/local-postgres.md).';
 }

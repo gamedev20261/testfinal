@@ -89,7 +89,7 @@ export function databaseFix(problem: string): string {
 |---|---|
 | `password authentication failed for user "postgres"` | Fix the user or password in `DATABASE_URL` |
 | `database "geoannotator" does not exist` | Run `npm run db:migrate` (it creates the database) |
-| `Can't reach database server at 127.0.0.1:5432` | Start PostgreSQL / check the port |
+| `Can't reach database server at 127.0.0.1:5432` | Start PostgreSQL (Docker, Mac or Windows instructions) / check the port |
 | anything else | Check `DATABASE_URL` |
 
 ### Log it at startup
